@@ -53,12 +53,28 @@ export function MessagesPage() {
         {sorted.map((c) => {
           const title = isDoctor ? c.hoTenBenhNhan : c.hoTenBacSi
           const subtitle = isDoctor ? 'Bệnh nhân' : `${c.chuyenKhoa} • ${c.tenCoSoYTe}`
+          const avatarUrl = isDoctor ? c.anhDaiDienBenhNhan : c.anhDaiDienBacSi
+
           return (
             <div key={c.maCuocHoiThoai} className="card row-between">
-              <div className="stack" style={{ gap: 4 }}>
-                <div style={{ fontWeight: 900 }}>{title}</div>
-                <div className="muted">{subtitle}</div>
-                {c.noiDungCuoi ? <div className="muted">Tin nhắn cuối: {c.noiDungCuoi}</div> : null}
+              <div className="row" style={{ gap: 16 }}>
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt={title} style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'cover' }} />
+                ) : (
+                  <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: 20 }}>
+                    {title.charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <div className="stack" style={{ gap: 4 }}>
+                  <div style={{ fontWeight: 900 }}>{title}</div>
+                  <div className="muted">{subtitle}</div>
+                  {c.noiDungCuoi ? (
+                    <div className="muted" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      Tin nhắn cuối: {c.noiDungCuoi} 
+                      <div title="Tin nhắn mới" style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--brand)' }} />
+                    </div>
+                  ) : null}
+                </div>
               </div>
               <button
                 className="btn btn-primary"
