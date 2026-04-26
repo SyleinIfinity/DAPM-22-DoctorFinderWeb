@@ -6,7 +6,7 @@ import { useAuth } from '../../auth/AuthContext'
 import { PageHeader } from '../../components/PageHeader'
 import { getApiErrorMessage } from '../../utils/errors'
 
-export function DoctorHomePage() {
+export function DoctorWorkspacePage() {
   const { session } = useAuth()
   const maTaiKhoan = session?.maTaiKhoan ?? null
 
@@ -18,7 +18,7 @@ export function DoctorHomePage() {
 
   return (
     <>
-      <PageHeader title="Dashboard bác sĩ" />
+      <PageHeader title="Kênh làm việc" right={<Link to="/doctor/home">Dashboard</Link>} />
 
       {query.isLoading ? <div className="muted">Đang tải…</div> : null}
       {query.isError ? (
@@ -40,17 +40,17 @@ export function DoctorHomePage() {
           </div>
 
           <div className="row">
-            <Link className="btn btn-primary" to="/doctor/requests">
-              Duyệt yêu cầu đặt lịch
-            </Link>
-            <Link className="btn" to="/doctor/workspace">
-              Kênh làm việc
-            </Link>
-            <Link className="btn" to="/doctor/schedule">
+            <Link className="btn btn-primary" to="/doctor/schedule">
               Cập nhật lịch làm việc
             </Link>
             <Link className="btn" to="/doctor/documents">
               Minh chứng
+            </Link>
+            <Link className="btn" to="/doctor/requests">
+              Duyệt lịch hẹn
+            </Link>
+            <Link className="btn" to="/doctor/account">
+              Hồ sơ cá nhân
             </Link>
           </div>
 
@@ -58,7 +58,7 @@ export function DoctorHomePage() {
             <div className="card">
               <div className="title">Lưu ý</div>
               <div className="muted" style={{ marginTop: 6 }}>
-                Nếu hồ sơ đang <b>{query.data.trangThaiHoSo}</b>, theo UX bạn có thể bị hạn chế nhận/duyệt lịch hẹn.
+                Hồ sơ đang <b>{query.data.trangThaiHoSo}</b>. Theo UX, bạn có thể bị hạn chế nhận/duyệt lịch hẹn.
               </div>
             </div>
           ) : null}

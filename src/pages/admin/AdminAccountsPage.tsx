@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../api/http'
 import type { AdminAccount, AdminAccountAction } from '../../api/types'
@@ -74,6 +75,9 @@ export function AdminAccountsPage() {
             </div>
 
             <div className="row">
+              <Link className="btn" to={`/admin/accounts/${a.maTaiKhoan}`}>
+                Chi tiết
+              </Link>
               {a.trangThaiHoatDong === 'KHOA' ? (
                 <button className="btn btn-primary" type="button" disabled={unlock.isPending} onClick={() => unlock.mutate(a.maTaiKhoan)}>
                   Mở khóa
@@ -102,4 +106,3 @@ export function AdminAccountsPage() {
     </>
   )
 }
-

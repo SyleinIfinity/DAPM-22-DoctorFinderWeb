@@ -17,7 +17,7 @@ export function DoctorLayout() {
         items={[
           { to: '/doctor/home', label: 'Dashboard' },
           { to: '/doctor/requests', label: 'Yêu cầu' },
-          { to: '/doctor/schedule', label: 'Lịch' },
+          { to: '/doctor/workspace', label: 'Kênh' },
           { to: '/doctor/messages', label: 'Tin nhắn' },
           { to: '/doctor/account', label: 'Tài khoản' },
         ]}
@@ -25,4 +25,3 @@ export function DoctorLayout() {
     </>
   )
 }
-

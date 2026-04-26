@@ -71,7 +71,7 @@ export function HomePage() {
         title="Trang chính"
         right={
           session?.maBacSi && session?.vaiTro?.toUpperCase() !== 'BAC_SI' ? (
-            <Link className="chip" to="/app/account">
+            <Link className="chip" to="/app/doctor-status">
               Hồ sơ bác sĩ: xem trạng thái
             </Link>
           ) : null
@@ -145,6 +145,17 @@ export function HomePage() {
 
       <div style={{ height: 12 }} />
 
+      <div className="card row">
+        <Link className="btn" to="/app/doctors/recent">
+          Bác sĩ vừa xem
+        </Link>
+        <Link className="btn" to="/app/doctors/suggested">
+          Bác sĩ gợi ý
+        </Link>
+      </div>
+
+      <div style={{ height: 12 }} />
+
       <div className="stack">
         {mode === 'TEXT' ? (
           <>
@@ -195,4 +206,3 @@ export function HomePage() {
     </>
   )
 }
-

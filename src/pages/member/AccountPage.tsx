@@ -230,6 +230,14 @@ export function AccountPage() {
           </div>
         ) : null}
 
+        {!isDoctor && !isAdmin && session?.maBacSi ? (
+          <div className="row">
+            <Link className="btn" to="/app/doctor-status">
+              Trạng thái hồ sơ bác sĩ
+            </Link>
+          </div>
+        ) : null}
+
         {error ? <div className="card" style={{ borderColor: 'rgba(239,68,68,0.6)' }}>{error}</div> : null}
       </div>
 
@@ -345,4 +353,3 @@ export function AccountPage() {
     </>
   )
 }
-
