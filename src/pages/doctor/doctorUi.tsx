@@ -23,10 +23,8 @@ function humanizeToken(value: string | null | undefined) {
 
 function formatDate(value: string | null | undefined, options?: Intl.DateTimeFormatOptions) {
   if (!value) return 'Chưa xác định'
-
   const parsed = new Date(`${value}T00:00:00`)
   if (Number.isNaN(parsed.getTime())) return value
-
   return new Intl.DateTimeFormat('vi-VN', options ?? { day: '2-digit', month: '2-digit', year: 'numeric' }).format(parsed)
 }
 
@@ -44,94 +42,62 @@ export function formatTime(value: string | null | undefined) {
 }
 
 export function formatTimeRange(start: string | null | undefined, end: string | null | undefined) {
-  return `${formatTime(start)} - ${formatTime(end)}`
+  return `${formatTime(start)} – ${formatTime(end)}`
 }
 
 export function createInitials(name: string | null | undefined) {
   if (!name) return 'BS'
-
-  const words = name
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-
+  const words = name.trim().split(/\s+/).filter(Boolean)
   if (words.length === 0) return 'BS'
   if (words.length === 1) return words[0].slice(0, 2).toUpperCase()
-
   return `${words[0][0] ?? ''}${words[words.length - 1][0] ?? ''}`.toUpperCase()
 }
 
 export function getProfileStatusMeta(status: string | null | undefined): StatusMeta {
   switch (status) {
     case 'DA_DUYET':
-      return {
-        label: 'Đã duyệt hồ sơ',
-        tone: 'success',
-        description: 'Bạn có thể nhận và xử lý lịch hẹn bình thường.',
-      }
+      return { label: 'Đã duyệt hồ sơ', tone: 'success', description: 'Bạn có thể nhận và xử lý lịch hẹn bình thường.' }
     case 'CHO_DUYET':
-      return {
-        label: 'Chờ duyệt hồ sơ',
-        tone: 'warning',
-        description: 'Hồ sơ đang được kiểm tra trước khi kích hoạt đầy đủ.',
-      }
+      return { label: 'Chờ duyệt hồ sơ', tone: 'warning', description: 'Hồ sơ đang được kiểm tra trước khi kích hoạt đầy đủ.' }
     case 'TU_CHOI':
-      return {
-        label: 'Hồ sơ bị từ chối',
-        tone: 'danger',
-        description: 'Cần bổ sung hoặc điều chỉnh thông tin và tài liệu.',
-      }
+      return { label: 'Hồ sơ bị từ chối', tone: 'danger', description: 'Cần bổ sung hoặc điều chỉnh thông tin và tài liệu.' }
     default:
-      return {
-        label: humanizeToken(status),
-        tone: 'info',
-        description: 'Kiểm tra lại trạng thái hồ sơ để đảm bảo vận hành ổn định.',
-      }
+      return { label: humanizeToken(status), tone: 'info', description: 'Kiểm tra lại trạng thái hồ sơ để đảm bảo vận hành ổn định.' }
   }
 }
 
 export function getScheduleStatusMeta(status: string | null | undefined): StatusMeta {
   switch (status) {
-    case 'SAP_DIEN_RA':
-      return { label: 'Sắp diễn ra', tone: 'info' }
-    case 'DANG_DIEN_RA':
-      return { label: 'Đang diễn ra', tone: 'success' }
-    case 'TAM_DUNG_NHAN_LICH':
-      return { label: 'Tạm dừng nhận lịch', tone: 'warning' }
-    case 'DA_HUY':
-      return { label: 'Đã hủy', tone: 'danger' }
-    default:
-      return { label: humanizeToken(status), tone: 'neutral' }
+    case 'SAP_DIEN_RA':       return { label: 'Sắp diễn ra', tone: 'info' }
+    case 'DANG_DIEN_RA':      return { label: 'Đang diễn ra', tone: 'success' }
+    case 'TAM_DUNG_NHAN_LICH': return { label: 'Tạm dừng nhận lịch', tone: 'warning' }
+    case 'DA_HUY':             return { label: 'Đã hủy', tone: 'danger' }
+    default:                   return { label: humanizeToken(status), tone: 'neutral' }
   }
 }
 
 export function getAppointmentStatusMeta(status: string | null | undefined): StatusMeta {
   switch (status) {
-    case 'CHO_XAC_NHAN':
-      return { label: 'Chờ xác nhận', tone: 'warning' }
-    case 'DA_DUYET':
-      return { label: 'Đã duyệt', tone: 'success' }
-    case 'TU_CHOI':
-      return { label: 'Đã từ chối', tone: 'danger' }
-    case 'DA_HUY':
-      return { label: 'Đã hủy', tone: 'neutral' }
-    default:
-      return { label: humanizeToken(status), tone: 'info' }
+    case 'CHO_XAC_NHAN': return { label: 'Chờ xác nhận', tone: 'warning' }
+    case 'DA_DUYET':      return { label: 'Đã duyệt', tone: 'success' }
+    case 'TU_CHOI':       return { label: 'Đã từ chối', tone: 'danger' }
+    case 'DA_HUY':        return { label: 'Đã hủy', tone: 'neutral' }
+    default:              return { label: humanizeToken(status), tone: 'info' }
   }
 }
 
 export function getSlotStateMeta(status: string | null | undefined): StatusMeta {
   switch (status) {
-    case 'TRONG':
-      return { label: 'Còn trống', tone: 'success' }
-    case 'DA_DAT':
-      return { label: 'Đã được đặt', tone: 'warning' }
-    case 'KHOA':
-      return { label: 'Đang khóa', tone: 'danger' }
-    default:
-      return { label: humanizeToken(status), tone: 'neutral' }
+    case 'TRONG':  return { label: 'Còn trống', tone: 'success' }
+    case 'DA_DAT': return { label: 'Đã được đặt', tone: 'warning' }
+    case 'KHOA':   return { label: 'Đang khóa', tone: 'danger' }
+    default:       return { label: humanizeToken(status), tone: 'neutral' }
   }
 }
+
+/* ────────────────────────────────────────────────────────────
+   PAGE HEADING
+──────────────────────────────────────────────────────────── */
 
 export function DoctorPageHeading({
   eyebrow,
@@ -156,9 +122,17 @@ export function DoctorPageHeading({
   )
 }
 
+/* ────────────────────────────────────────────────────────────
+   STATUS BADGE
+──────────────────────────────────────────────────────────── */
+
 export function DoctorStatusBadge({ label, tone }: { label: string; tone: Tone }) {
   return <span className={cx('doctor-badge', `doctor-badge--${tone}`)}>{label}</span>
 }
+
+/* ────────────────────────────────────────────────────────────
+   PANEL
+──────────────────────────────────────────────────────────── */
 
 export function DoctorPanel({
   title,
@@ -175,7 +149,7 @@ export function DoctorPanel({
 }) {
   return (
     <section className={cx('doctor-panel', className)}>
-      {title || description || aside ? (
+      {(title || description || aside) ? (
         <div className="doctor-panel__header">
           <div>
             {title ? <h2 className="doctor-panel__title">{title}</h2> : null}
@@ -188,6 +162,10 @@ export function DoctorPanel({
     </section>
   )
 }
+
+/* ────────────────────────────────────────────────────────────
+   NOTICE
+──────────────────────────────────────────────────────────── */
 
 export function DoctorNotice({
   tone = 'neutral',
@@ -211,6 +189,10 @@ export function DoctorNotice({
   )
 }
 
+/* ────────────────────────────────────────────────────────────
+   STAT CARD
+──────────────────────────────────────────────────────────── */
+
 export function DoctorStatCard({
   label,
   value,
@@ -229,6 +211,10 @@ export function DoctorStatCard({
   )
 }
 
+/* ────────────────────────────────────────────────────────────
+   EMPTY STATE
+──────────────────────────────────────────────────────────── */
+
 export function DoctorEmptyState({
   title,
   description,
@@ -240,13 +226,17 @@ export function DoctorEmptyState({
 }) {
   return (
     <div className="doctor-empty-state">
-      <div className="doctor-empty-state__icon">+</div>
+      <div className="doctor-empty-state__icon">∅</div>
       <div className="doctor-empty-state__title">{title}</div>
       <p className="doctor-empty-state__description">{description}</p>
       {action ? <div>{action}</div> : null}
     </div>
   )
 }
+
+/* ────────────────────────────────────────────────────────────
+   AVATAR
+──────────────────────────────────────────────────────────── */
 
 export function DoctorAvatar({
   name,
@@ -255,9 +245,20 @@ export function DoctorAvatar({
   name: string
   imageUrl?: string | null
 }) {
-  if (imageUrl) {
-    return <img className="doctor-avatar doctor-avatar--image" src={imageUrl} alt={name} />
-  }
+  const seed = encodeURIComponent(name || 'doctor')
+  const dicebear = `https://api.dicebear.com/9.x/initials/svg?seed=${seed}&backgroundColor=0e9e8a,0a6e62,1a6fa0&backgroundType=gradientLinear&fontSize=38&fontWeight=600`
 
-  return <div className="doctor-avatar">{createInitials(name)}</div>
+  const src = imageUrl || dicebear
+
+  return (
+    <img
+      className="doctor-avatar doctor-avatar--image"
+      src={src}
+      alt={name}
+      onError={(e) => {
+        const target = e.currentTarget
+        if (target.src !== dicebear) target.src = dicebear
+      }}
+    />
+  )
 }
