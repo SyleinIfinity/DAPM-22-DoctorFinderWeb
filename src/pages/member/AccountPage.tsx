@@ -564,7 +564,6 @@ export function AccountPage() {
           <DoctorPanel
             title="Hồ sơ người dùng"
             description="Chỉnh sửa thông tin cá nhân trước khi chuyển sang hồ sơ bác sĩ hoặc quay về tài khoản người dùng."
-            aside={<button className="doctor-button doctor-button--ghost" type="button" onClick={handleLogout} style={{ alignSelf: 'flex-start' }}>Đăng xuất</button>}
           >
             {userNotice ? <DoctorNotice tone={userNotice.tone} title={userNotice.title} description={userNotice.description} /> : null}
             <div className="doctor-form-grid">
@@ -582,13 +581,18 @@ export function AccountPage() {
                 </div>
               ))}
             </div>
-            <div className="doctor-button-row">
-              <button className="doctor-button doctor-button--primary" type="button" disabled={!maNguoiDung || updateUserMutation.isPending} onClick={() => { setUserNotice(null); updateUserMutation.mutate() }}>
-                {updateUserMutation.isPending ? 'Đang lưu…' : 'Lưu thông tin cá nhân'}
+            <div className="doctor-button-row" style={{ justifyContent: 'space-between' }}>
+              <button className="doctor-button doctor-button--danger" type="button" onClick={handleLogout}>
+                Đăng xuất
               </button>
-              <button className="doctor-button doctor-button--secondary" type="button" onClick={goToDoctorIdentity} disabled={!canSwitchToDoctor}>
-                Chuyển sang hồ sơ bác sĩ
-              </button>
+              <div className="doctor-button-row">
+                <button className="doctor-button doctor-button--primary" type="button" disabled={!maNguoiDung || updateUserMutation.isPending} onClick={() => { setUserNotice(null); updateUserMutation.mutate() }}>
+                  {updateUserMutation.isPending ? 'Đang lưu…' : 'Lưu thông tin cá nhân'}
+                </button>
+                <button className="doctor-button doctor-button--secondary" type="button" onClick={goToDoctorIdentity} disabled={!canSwitchToDoctor}>
+                  Chuyển sang hồ sơ bác sĩ
+                </button>
+              </div>
             </div>
           </DoctorPanel>
         </>
