@@ -68,36 +68,37 @@ export function getProfileStatusMeta(status: string | null | undefined): StatusM
 
 export function getScheduleStatusMeta(status: string | null | undefined): StatusMeta {
   switch (status) {
-    case 'SAP_DIEN_RA':       return { label: 'Sắp diễn ra', tone: 'info' }
-    case 'DANG_DIEN_RA':      return { label: 'Đang diễn ra', tone: 'success' }
-    case 'TAM_DUNG_NHAN_LICH': return { label: 'Tạm dừng nhận lịch', tone: 'warning' }
-    case 'DA_HUY':             return { label: 'Đã hủy', tone: 'danger' }
-    default:                   return { label: humanizeToken(status), tone: 'neutral' }
+    case 'SAP_DIEN_RA':
+      return { label: 'Sắp diễn ra', tone: 'info' }
+    case 'DANG_DIEN_RA':
+      return { label: 'Đang diễn ra', tone: 'success' }
+    case 'TAM_DUNG_NHAN_LICH':
+      return { label: 'Tạm dừng nhận lịch', tone: 'warning' }
+    case 'DA_HUY':
+      return { label: 'Đã hủy', tone: 'danger' }
+    default:
+      return { label: humanizeToken(status), tone: 'neutral' }
   }
 }
 
 export function getAppointmentStatusMeta(status: string | null | undefined): StatusMeta {
   switch (status) {
     case 'CHO_XAC_NHAN': return { label: 'Chờ xác nhận', tone: 'warning' }
-    case 'DA_DUYET':      return { label: 'Đã duyệt', tone: 'success' }
-    case 'TU_CHOI':       return { label: 'Đã từ chối', tone: 'danger' }
-    case 'DA_HUY':        return { label: 'Đã hủy', tone: 'neutral' }
-    default:              return { label: humanizeToken(status), tone: 'info' }
+    case 'DA_DUYET': return { label: 'Đã đồng ý', tone: 'success' }
+    case 'TU_CHOI': return { label: 'Đã từ chối', tone: 'danger' }
+    case 'DA_HUY': return { label: 'Đã hủy', tone: 'neutral' }
+    default: return { label: humanizeToken(status), tone: 'info' }
   }
 }
 
 export function getSlotStateMeta(status: string | null | undefined): StatusMeta {
   switch (status) {
-    case 'TRONG':  return { label: 'Còn trống', tone: 'success' }
+    case 'TRONG': return { label: 'Còn trống', tone: 'success' }
     case 'DA_DAT': return { label: 'Đã được đặt', tone: 'warning' }
-    case 'KHOA':   return { label: 'Đang khóa', tone: 'danger' }
-    default:       return { label: humanizeToken(status), tone: 'neutral' }
+    case 'KHOA': return { label: 'Đang khóa', tone: 'danger' }
+    default: return { label: humanizeToken(status), tone: 'neutral' }
   }
 }
-
-/* ────────────────────────────────────────────────────────────
-   PAGE HEADING
-──────────────────────────────────────────────────────────── */
 
 export function DoctorPageHeading({
   eyebrow,
@@ -122,17 +123,9 @@ export function DoctorPageHeading({
   )
 }
 
-/* ────────────────────────────────────────────────────────────
-   STATUS BADGE
-──────────────────────────────────────────────────────────── */
-
 export function DoctorStatusBadge({ label, tone }: { label: string; tone: Tone }) {
   return <span className={cx('doctor-badge', `doctor-badge--${tone}`)}>{label}</span>
 }
-
-/* ────────────────────────────────────────────────────────────
-   PANEL
-──────────────────────────────────────────────────────────── */
 
 export function DoctorPanel({
   title,
@@ -163,10 +156,6 @@ export function DoctorPanel({
   )
 }
 
-/* ────────────────────────────────────────────────────────────
-   NOTICE
-──────────────────────────────────────────────────────────── */
-
 export function DoctorNotice({
   tone = 'neutral',
   title,
@@ -189,10 +178,6 @@ export function DoctorNotice({
   )
 }
 
-/* ────────────────────────────────────────────────────────────
-   STAT CARD
-──────────────────────────────────────────────────────────── */
-
 export function DoctorStatCard({
   label,
   value,
@@ -210,10 +195,6 @@ export function DoctorStatCard({
     </div>
   )
 }
-
-/* ────────────────────────────────────────────────────────────
-   EMPTY STATE
-──────────────────────────────────────────────────────────── */
 
 export function DoctorEmptyState({
   title,
@@ -233,10 +214,6 @@ export function DoctorEmptyState({
     </div>
   )
 }
-
-/* ────────────────────────────────────────────────────────────
-   AVATAR
-──────────────────────────────────────────────────────────── */
 
 export function DoctorAvatar({
   name,

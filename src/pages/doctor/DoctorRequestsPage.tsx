@@ -23,12 +23,22 @@ type NoticeState = {
   description: string
 } | null
 
+type RequestTab = 'all' | 'pending' | 'approved' | 'rejected'
+
+const TAB_LABELS: Record<RequestTab, string> = {
+  all: 'Tất cả',
+  pending: 'Chờ xác nhận',
+  approved: 'Đã đồng ý',
+  rejected: 'Đã từ chối',
+}
+
 export function DoctorRequestsPage() {
   const qc = useQueryClient()
   const { session } = useAuth()
   const maBacSi = session?.maBacSi ?? null
 
   const [notice, setNotice] = useState<NoticeState>(null)
+  const [activeTab, setActiveTab] = useState<RequestTab>('all')
   const [rejectingId, setRejectingId] = useState<number | null>(null)
   const [lyDoTuChoi, setLyDoTuChoi] = useState('')
 
@@ -40,39 +50,30 @@ export function DoctorRequestsPage() {
 
   const requests = query.data ?? []
 
-  const pendingCount = useMemo(
-    () => requests.filter((request) => request.trangThaiPhieu === 'CHO_XAC_NHAN').length,
-    [requests],
-  )
+  const filteredRequests = useMemo(() => {
+    if (activeTab === 'pending') return requests.filter((request) => request.trangThaiPhieu === 'CHO_XAC_NHAN')
+    if (activeTab === 'approved') return requests.filter((request) => request.trangThaiPhieu === 'DA_DUYET')
+    if (activeTab === 'rejected') return requests.filter((request) => request.trangThaiPhieu === 'TU_CHOI')
+    return requests
+  }, [activeTab, requests])
 
-  const symptomCount = useMemo(
-    () => requests.filter((request) => Boolean(request.trieuChungGhiChu?.trim())).length,
-    [requests],
-  )
+  const pendingCount = useMemo(() => requests.filter((request) => request.trangThaiPhieu === 'CHO_XAC_NHAN').length, [requests])
+  const approvedCount = useMemo(() => requests.filter((request) => request.trangThaiPhieu === 'DA_DUYET').length, [requests])
+  const rejectedCount = useMemo(() => requests.filter((request) => request.trangThaiPhieu === 'TU_CHOI').length, [requests])
+  const symptomCount = useMemo(() => requests.filter((request) => Boolean(request.trieuChungGhiChu?.trim())).length, [requests])
 
-  const uniquePatients = useMemo(
-    () => new Set(requests.map((request) => request.maNguoiDung)).size,
-    [requests],
-  )
+  const uniquePatients = useMemo(() => new Set(requests.map((request) => request.maNguoiDung)).size, [requests])
 
   const approve = useMutation({
     mutationFn: async (maPhieuDatLich: number) => {
       await api.post(`/api/appointments/${maPhieuDatLich}/approve`)
     },
     onSuccess: async () => {
-      setNotice({
-        tone: 'success',
-        title: 'Đã duyệt lịch hẹn',
-        description: 'Yêu cầu đặt lịch đã được xác nhận thành công.',
-      })
+      setNotice({ tone: 'success', title: 'Đã duyệt lịch hẹn', description: 'Yêu cầu đặt lịch đã được xác nhận thành công.' })
       await qc.invalidateQueries({ queryKey: ['appointment-requests', maBacSi] })
     },
     onError: (err) =>
-      setNotice({
-        tone: 'danger',
-        title: 'Không thể duyệt lịch hẹn',
-        description: getApiErrorMessage(err),
-      }),
+      setNotice({ tone: 'danger', title: 'Không thể duyệt lịch hẹn', description: getApiErrorMessage(err) }),
   })
 
   const reject = useMutation({
@@ -80,21 +81,13 @@ export function DoctorRequestsPage() {
       await api.post(`/api/appointments/${maPhieuDatLich}/reject`, { lyDoTuChoi: reason })
     },
     onSuccess: async () => {
-      setNotice({
-        tone: 'success',
-        title: 'Đã từ chối lịch hẹn',
-        description: 'Lý do từ chối đã được gửi kèm theo phiếu đặt lịch.',
-      })
+      setNotice({ tone: 'success', title: 'Đã từ chối lịch hẹn', description: 'Lý do từ chối đã được gửi kèm theo phiếu đặt lịch.' })
       setRejectingId(null)
       setLyDoTuChoi('')
       await qc.invalidateQueries({ queryKey: ['appointment-requests', maBacSi] })
     },
     onError: (err) =>
-      setNotice({
-        tone: 'danger',
-        title: 'Không thể từ chối lịch hẹn',
-        description: getApiErrorMessage(err),
-      }),
+      setNotice({ tone: 'danger', title: 'Không thể từ chối lịch hẹn', description: getApiErrorMessage(err) }),
   })
 
   return (
@@ -118,37 +111,46 @@ export function DoctorRequestsPage() {
       <section className="doctor-metrics-grid">
         <DoctorStatCard label="Tổng yêu cầu" value={String(requests.length)} hint="Số lượng phiếu đặt lịch đang được nạp trong danh sách hiện tại." />
         <DoctorStatCard label="Chờ xác nhận" value={String(pendingCount)} hint="Những phiếu này nên được xử lý sớm để tránh chậm phản hồi cho bệnh nhân." />
-        <DoctorStatCard label="Có ghi chú triệu chứng" value={String(symptomCount)} hint="Các yêu cầu có ghi chú giúp bác sĩ sàng lọc trước khi duyệt." />
-        <DoctorStatCard label="Bệnh nhân riêng biệt" value={String(uniquePatients)} hint="Cho biết mức độ phân tán của các yêu cầu đang chờ." />
+        <DoctorStatCard label="Đã đồng ý" value={String(approvedCount)} hint="Các lịch hẹn đã được xác nhận và có thể theo dõi riêng." />
+        <DoctorStatCard label="Đã từ chối" value={String(rejectedCount)} hint="Nhóm phiếu này được tách riêng để dễ tra cứu lý do xử lý." />
       </section>
 
       <DoctorPanel
         title="Danh sách yêu cầu"
         description="Mỗi phiếu hiển thị thời gian hẹn, thông tin bệnh nhân và ghi chú triệu chứng nếu có."
-        aside={<span className="doctor-count-bubble">{requests.length}</span>}
+        aside={<span className="doctor-count-bubble">{filteredRequests.length}</span>}
       >
+        <div className="doctor-tab-row" style={{ marginBottom: 16 }}>
+          {(Object.keys(TAB_LABELS) as RequestTab[]).map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              className={activeTab === tab ? 'doctor-button doctor-button--primary' : 'doctor-button doctor-button--secondary'}
+              onClick={() => setActiveTab(tab)}
+            >
+              {TAB_LABELS[tab]}
+            </button>
+          ))}
+        </div>
+
         {query.isLoading ? (
-          <DoctorNotice
-            tone="info"
-            title="Đang tải yêu cầu đặt lịch"
-            description="Hệ thống đang đồng bộ danh sách bệnh nhân chờ bác sĩ xác nhận."
-          />
+          <DoctorNotice tone="info" title="Đang tải yêu cầu đặt lịch" description="Hệ thống đang đồng bộ danh sách bệnh nhân chờ bác sĩ xác nhận." />
         ) : null}
 
         {query.isError ? (
           <DoctorNotice tone="danger" title="Không thể tải danh sách yêu cầu" description={getApiErrorMessage(query.error)} />
         ) : null}
 
-        {!query.isLoading && !query.isError && requests.length === 0 ? (
+        {!query.isLoading && !query.isError && filteredRequests.length === 0 ? (
           <DoctorEmptyState
-            title="Không có yêu cầu chờ xác nhận"
-            description="Khi có lịch hẹn mới, chúng sẽ xuất hiện tại đây để bạn duyệt hoặc từ chối ngay trên từng phiếu."
+            title="Không có yêu cầu ở tab này"
+            description="Hãy chuyển sang tab khác để xem các lịch hẹn đã đồng ý hoặc từ chối."
           />
         ) : null}
 
-        {requests.length > 0 ? (
+        {filteredRequests.length > 0 ? (
           <div className="doctor-list">
-            {requests.map((request) => {
+            {filteredRequests.map((request) => {
               const status = getAppointmentStatusMeta(request.trangThaiPhieu)
               const isRejecting = rejectingId === request.maPhieuDatLich
 
@@ -235,25 +237,29 @@ export function DoctorRequestsPage() {
                     </div>
                   ) : (
                     <div className="doctor-button-row">
-                      <button
-                        className="doctor-button doctor-button--primary"
-                        type="button"
-                        disabled={approve.isPending}
-                        onClick={() => approve.mutate(request.maPhieuDatLich)}
-                      >
-                        {approve.isPending ? 'Đang duyệt...' : 'Đồng ý lịch hẹn'}
-                      </button>
-                      <button
-                        className="doctor-button doctor-button--danger"
-                        type="button"
-                        disabled={reject.isPending}
-                        onClick={() => {
-                          setRejectingId(request.maPhieuDatLich)
-                          setLyDoTuChoi('')
-                        }}
-                      >
-                        Từ chối lịch hẹn
-                      </button>
+                      {request.trangThaiPhieu === 'CHO_XAC_NHAN' ? (
+                        <>
+                          <button
+                            className="doctor-button doctor-button--primary"
+                            type="button"
+                            disabled={approve.isPending}
+                            onClick={() => approve.mutate(request.maPhieuDatLich)}
+                          >
+                            {approve.isPending ? 'Đang duyệt...' : 'Đồng ý lịch hẹn'}
+                          </button>
+                          <button
+                            className="doctor-button doctor-button--danger"
+                            type="button"
+                            disabled={reject.isPending}
+                            onClick={() => {
+                              setRejectingId(request.maPhieuDatLich)
+                              setLyDoTuChoi('')
+                            }}
+                          >
+                            Từ chối lịch hẹn
+                          </button>
+                        </>
+                      ) : null}
                     </div>
                   )}
                 </article>
