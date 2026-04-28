@@ -9,7 +9,12 @@ import { getApiErrorMessage } from '../../utils/errors'
 
 function normalizeTime(value: string): string {
   if (!value) return ''
-  // LocalDateTime: 2026-04-26T10:20:30
+
+  const date = new Date(value)
+  if (!Number.isNaN(date.getTime())) {
+    return new Intl.DateTimeFormat('vi-VN', { hour: '2-digit', minute: '2-digit' }).format(date)
+  }
+
   const parts = value.split('T')
   if (parts.length !== 2) return value
   return parts[1].slice(0, 5)
@@ -64,62 +69,79 @@ export function ChatPage() {
     setError(null)
   }, [maCuocHoiThoai])
 
+  useEffect(() => {
+    if (error && noiDung.trim()) setError(null)
+  }, [noiDung, error])
+
   if (!Number.isFinite(maCuocHoiThoai) || maCuocHoiThoai <= 0) {
     return (
-      <>
+      <section className={`message-page ${isDoctor ? 'message-page--doctor' : 'message-page--member'}`}>
         <PageHeader title="Chat" />
-        <div className="card">URL không hợp lệ.</div>
-      </>
+        <div className="message-notice message-notice--danger">URL không hợp lệ.</div>
+      </section>
     )
   }
 
   return (
-    <>
-      <PageHeader title="Chat" right={<Link to={`${base}/messages`}>Danh sách</Link>} />
+    <section className={`message-page ${isDoctor ? 'message-page--doctor' : 'message-page--member'}`}>
+      <PageHeader title="Chat" right={<Link className="message-page__link" to={`${base}/messages`}>Danh sách</Link>} />
+      <p className="message-page__intro">
+        {isDoctor
+          ? 'Trao đổi nhanh với bệnh nhân. Dữ liệu được làm mới tự động mỗi 5 giây.'
+          : 'Nhận thông tin tư vấn từ bác sĩ và tiếp tục hỏi đáp trong cùng hội thoại.'}
+      </p>
 
-      {query.isLoading ? <div className="muted">Đang tải…</div> : null}
+      {query.isLoading ? <div className="message-notice">Đang tải hội thoại...</div> : null}
       {query.isError ? (
-        <div className="card" style={{ borderColor: 'rgba(239,68,68,0.6)' }}>
-          {getApiErrorMessage(query.error)}
-        </div>
+        <div className="message-notice message-notice--danger">{getApiErrorMessage(query.error)}</div>
       ) : null}
 
-      <div className="card stack">
-        {messages.length === 0 ? <div className="muted">Chưa có tin nhắn.</div> : null}
-        {messages.map((m) => {
-          const mine = m.maTaiKhoanGui === session?.maTaiKhoan
-          return (
-            <div
-              key={m.maTinNhan}
-              className="card"
-              style={{
-                background: mine ? 'rgba(124,58,237,0.18)' : 'rgba(255,255,255,0.06)',
-              }}
-            >
-              <div className="row-between">
-                <span className="chip">{mine ? 'Bạn' : `TK ${m.maTaiKhoanGui}`}</span>
-                <span className="muted">{normalizeTime(m.thoiGianGui)}</span>
-              </div>
-              <div style={{ marginTop: 6 }}>{m.noiDungTinNhan}</div>
+      <div className="chat-shell">
+        <div className="chat-shell__messages">
+          {messages.length === 0 && !query.isLoading ? (
+            <div className="message-empty-state message-empty-state--compact">
+              <div className="message-empty-state__icon">...</div>
+              <div className="message-empty-state__title">Chưa có tin nhắn</div>
+              <p className="message-empty-state__description">Hãy gửi lời nhắn đầu tiên để bắt đầu cuộc trò chuyện.</p>
             </div>
-          )
-        })}
+          ) : null}
 
-        {error ? <div className="card" style={{ borderColor: 'rgba(239,68,68,0.6)' }}>{error}</div> : null}
+          {messages.map((m) => {
+            const mine = m.maTaiKhoanGui === session?.maTaiKhoan
 
-        <div className="row" style={{ alignItems: 'stretch' }}>
+            return (
+              <div key={m.maTinNhan} className={`chat-row ${mine ? 'chat-row--mine' : ''}`}>
+                <article className={`chat-bubble ${mine ? 'chat-bubble--mine' : ''}`}>
+                  <div className="chat-bubble__meta">
+                    <span className="chat-bubble__author">{mine ? 'Bạn' : `Tài khoản ${m.maTaiKhoanGui}`}</span>
+                    <span className="chat-bubble__time">{normalizeTime(m.thoiGianGui)}</span>
+                  </div>
+                  <div className="chat-bubble__content">{m.noiDungTinNhan}</div>
+                </article>
+              </div>
+            )
+          })}
+        </div>
+
+        {error ? <div className="message-notice message-notice--danger">{error}</div> : null}
+
+        <div className="chat-composer">
           <input
-            className="input"
+            className="chat-composer__input"
             value={noiDung}
             onChange={(e) => setNoiDung(e.target.value)}
-            placeholder="Nhập tin nhắn…"
+            placeholder="Nhập tin nhắn..."
           />
-          <button className="btn btn-primary" type="button" disabled={sendMutation.isPending} onClick={() => sendMutation.mutate()}>
-            Gửi
+          <button
+            className="message-thread-card__open chat-composer__send"
+            type="button"
+            disabled={sendMutation.isPending}
+            onClick={() => sendMutation.mutate()}
+          >
+            {sendMutation.isPending ? 'Đang gửi' : 'Gửi'}
           </button>
         </div>
       </div>
-    </>
+    </section>
   )
 }
-

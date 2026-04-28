@@ -3,15 +3,42 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../api/http'
 import type { TimeSlot, WorkingSchedule, WorkingSlot } from '../../api/types'
 import { useAuth } from '../../auth/AuthContext'
-import { PageHeader } from '../../components/PageHeader'
 import { getApiErrorMessage } from '../../utils/errors'
+import {
+  DoctorEmptyState,
+  DoctorNotice,
+  DoctorPageHeading,
+  DoctorPanel,
+  DoctorStatCard,
+  DoctorStatusBadge,
+  formatLongDate,
+  formatTimeRange,
+  getScheduleStatusMeta,
+  getSlotStateMeta,
+} from './doctorUi'
 
-function todayYmd(): string {
+type NoticeState = {
+  tone: 'success' | 'danger'
+  title: string
+  description: string
+} | null
+
+function todayYmd() {
   const now = new Date()
   const y = now.getFullYear()
   const m = String(now.getMonth() + 1).padStart(2, '0')
   const d = String(now.getDate()).padStart(2, '0')
   return `${y}-${m}-${d}`
+}
+
+function diffMinutes(start: string, end: string) {
+  const [startHour, startMinute] = start.split(':').map(Number)
+  const [endHour, endMinute] = end.split(':').map(Number)
+
+  const startTotal = startHour * 60 + startMinute
+  const endTotal = endHour * 60 + endMinute
+
+  return Math.max(endTotal - startTotal, 0)
 }
 
 export function DoctorSchedulePage() {
@@ -25,7 +52,7 @@ export function DoctorSchedulePage() {
   const [maKhungGio, setMaKhungGio] = useState<number>(30)
   const [soLuongToiDa, setSoLuongToiDa] = useState<number>(1)
   const [trangThaiLich, setTrangThaiLich] = useState('SAP_DIEN_RA')
-  const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<NoticeState>(null)
 
   const timeSlotsQuery = useQuery({
     queryKey: ['time-slots'],
@@ -41,7 +68,8 @@ export function DoctorSchedulePage() {
 
   const upsertMutation = useMutation({
     mutationFn: async () => {
-      if (!maBacSi) throw new Error('Thiếu maBacSi')
+      if (!maBacSi) throw new Error('Thiếu mã bác sĩ')
+
       const res = await api.put<WorkingSchedule[]>(`/api/doctors/${maBacSi}/working-slots`, {
         items: [
           {
@@ -58,98 +86,240 @@ export function DoctorSchedulePage() {
       return res.data
     },
     onSuccess: async () => {
-      setError(null)
-      alert('Cập nhật lịch thành công')
+      setNotice({
+        tone: 'success',
+        title: 'Đã cập nhật lịch làm việc',
+        description: 'Khung giờ làm việc của bạn đã được lưu thành công.',
+      })
       await qc.invalidateQueries({ queryKey: ['working-slots', maBacSi, date] })
     },
-    onError: (err) => setError(getApiErrorMessage(err)),
+    onError: (err) =>
+      setNotice({
+        tone: 'danger',
+        title: 'Không thể lưu lịch làm việc',
+        description: getApiErrorMessage(err),
+      }),
   })
 
-  const timeSlotOptions = useMemo(() => timeSlotsQuery.data || [], [timeSlotsQuery.data])
+  const timeSlotOptions = timeSlotsQuery.data ?? []
+  const slots = slotsQuery.data ?? []
+
+  const duration = useMemo(
+    () => timeSlotOptions.find((slot) => slot.maKhungGio === maKhungGio)?.thoiLuongPhut ?? 0,
+    [maKhungGio, timeSlotOptions],
+  )
+
+  const sessionMinutes = diffMinutes(gioBatDau, gioKetThuc)
+  const estimatedSlots = duration > 0 ? Math.floor(sessionMinutes / duration) : 0
+  const scheduleStatus = getScheduleStatusMeta(trangThaiLich)
 
   return (
-    <>
-      <PageHeader title="Lịch làm việc" />
+    <div className="doctor-page">
+      <DoctorPageHeading
+        eyebrow="Working schedule"
+        title="Lịch làm việc"
+        description="Thiết lập ca khám theo ngày cụ thể với giao diện rõ nhịp, dễ đọc và phù hợp bối cảnh vận hành y khoa."
+      />
 
-      {!maBacSi ? <div className="card">Thiếu maBacSi. Hãy đăng nhập lại.</div> : null}
+      {!maBacSi ? (
+        <DoctorNotice
+          tone="danger"
+          title="Thiếu liên kết mã bác sĩ"
+          description="Phiên đăng nhập hiện không có mã bác sĩ. Hãy đăng nhập lại để tiếp tục cập nhật lịch."
+        />
+      ) : null}
 
-      <div className="card stack">
-        <div className="grid">
-          <div className="stack">
-            <div className="label">Ngày</div>
-            <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-          </div>
-          <div className="stack">
-            <div className="label">Giờ bắt đầu</div>
-            <input className="input" type="time" value={gioBatDau} onChange={(e) => setGioBatDau(e.target.value)} />
-          </div>
-          <div className="stack">
-            <div className="label">Giờ kết thúc</div>
-            <input className="input" type="time" value={gioKetThuc} onChange={(e) => setGioKetThuc(e.target.value)} />
-          </div>
-          <div className="stack">
-            <div className="label">Khung giờ</div>
-            <select className="input" value={maKhungGio} onChange={(e) => setMaKhungGio(Number(e.target.value))}>
-              {timeSlotOptions.map((t) => (
-                <option key={t.maKhungGio} value={t.maKhungGio}>
-                  #{t.maKhungGio} • {t.thoiLuongPhut} phút
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="stack">
-            <div className="label">Số lượng tối đa</div>
-            <input
-              className="input"
-              type="number"
-              min={1}
-              value={soLuongToiDa}
-              onChange={(e) => setSoLuongToiDa(Number(e.target.value))}
-            />
-          </div>
-          <div className="stack">
-            <div className="label">Trạng thái lịch</div>
-            <select className="input" value={trangThaiLich} onChange={(e) => setTrangThaiLich(e.target.value)}>
-              {['SAP_DIEN_RA', 'DANG_DIEN_RA', 'TAM_DUNG_NHAN_LICH', 'DA_HUY'].map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
+      {notice ? <DoctorNotice tone={notice.tone} title={notice.title} description={notice.description} /> : null}
 
-        {error ? <div className="card" style={{ borderColor: 'rgba(239,68,68,0.6)' }}>{error}</div> : null}
+      <section className="doctor-metrics-grid">
+        <DoctorStatCard label="Ngày đang chỉnh" value={formatLongDate(date)} hint="Ngày cụ thể mà biểu mẫu hiện tại sẽ áp dụng." />
+        <DoctorStatCard label="Thời lượng mỗi khung" value={duration > 0 ? `${duration} phút` : 'Chưa chọn'} hint="Lấy từ danh mục khung giờ của hệ thống." />
+        <DoctorStatCard label="Số slot ước tính" value={String(estimatedSlots)} hint="Ước tính dựa trên giờ bắt đầu, kết thúc và độ dài khung giờ." />
+        <DoctorStatCard label="Trạng thái lịch" value={scheduleStatus.label} hint="Thiết lập này ảnh hưởng trực tiếp đến khả năng nhận lịch từ bệnh nhân." />
+      </section>
 
-        <button className="btn btn-primary" type="button" disabled={upsertMutation.isPending} onClick={() => upsertMutation.mutate()}>
-          {upsertMutation.isPending ? 'Đang lưu…' : 'Lưu lịch'}
-        </button>
+      <div className="doctor-schedule-grid">
+        <DoctorPanel title="Biểu mẫu thiết lập ca làm việc" description="Điền nhanh ngày, khung giờ và trạng thái để mở hoặc điều chỉnh lịch khám.">
+          <div className="doctor-form-grid doctor-form-grid--compact">
+            <div className="doctor-field">
+              <label className="doctor-label" htmlFor="schedule-date">
+                Ngày cụ thể
+              </label>
+              <input id="schedule-date" className="doctor-input" type="date" value={date} onChange={(event) => setDate(event.target.value)} />
+            </div>
+
+            <div className="doctor-field">
+              <label className="doctor-label" htmlFor="schedule-start">
+                Giờ bắt đầu
+              </label>
+              <input
+                id="schedule-start"
+                className="doctor-input"
+                type="time"
+                value={gioBatDau}
+                onChange={(event) => setGioBatDau(event.target.value)}
+              />
+            </div>
+
+            <div className="doctor-field">
+              <label className="doctor-label" htmlFor="schedule-end">
+                Giờ kết thúc
+              </label>
+              <input
+                id="schedule-end"
+                className="doctor-input"
+                type="time"
+                value={gioKetThuc}
+                onChange={(event) => setGioKetThuc(event.target.value)}
+              />
+            </div>
+
+            <div className="doctor-field">
+              <label className="doctor-label" htmlFor="schedule-slot">
+                Khung giờ
+              </label>
+              <select
+                id="schedule-slot"
+                className="doctor-select"
+                value={maKhungGio}
+                onChange={(event) => setMaKhungGio(Number(event.target.value))}
+              >
+                {timeSlotOptions.map((slot) => (
+                  <option key={slot.maKhungGio} value={slot.maKhungGio}>
+                    #{slot.maKhungGio} • {slot.thoiLuongPhut} phút
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="doctor-field">
+              <label className="doctor-label" htmlFor="schedule-capacity">
+                Số lượng tối đa
+              </label>
+              <input
+                id="schedule-capacity"
+                className="doctor-input"
+                type="number"
+                min={1}
+                value={soLuongToiDa}
+                onChange={(event) => setSoLuongToiDa(Number(event.target.value))}
+              />
+            </div>
+
+            <div className="doctor-field">
+              <label className="doctor-label" htmlFor="schedule-status">
+                Trạng thái lịch
+              </label>
+              <select
+                id="schedule-status"
+                className="doctor-select"
+                value={trangThaiLich}
+                onChange={(event) => setTrangThaiLich(event.target.value)}
+              >
+                {['SAP_DIEN_RA', 'DANG_DIEN_RA', 'TAM_DUNG_NHAN_LICH', 'DA_HUY'].map((status) => (
+                  <option key={status} value={status}>
+                    {getScheduleStatusMeta(status).label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="doctor-button-row">
+            <button className="doctor-button doctor-button--primary" type="button" disabled={upsertMutation.isPending || !maBacSi} onClick={() => upsertMutation.mutate()}>
+              {upsertMutation.isPending ? 'Đang lưu lịch...' : 'Lưu lịch làm việc'}
+            </button>
+            <DoctorStatusBadge label={scheduleStatus.label} tone={scheduleStatus.tone} />
+          </div>
+        </DoctorPanel>
+
+        <DoctorPanel title="Tóm tắt cấu hình hiện tại" description="Bản xem trước giúp bác sĩ kiểm tra nhanh logic ca làm việc trước khi lưu.">
+          <div className="doctor-section-stack">
+            <div className="doctor-note-card">
+              <p className="doctor-note">Ngày áp dụng: {formatLongDate(date)}</p>
+            </div>
+            <div className="doctor-note-card">
+              <p className="doctor-note">Khung giờ làm việc: {formatTimeRange(gioBatDau, gioKetThuc)}</p>
+            </div>
+            <div className="doctor-note-card">
+              <p className="doctor-note">
+                Ước tính có thể tạo khoảng {estimatedSlots} slot với thời lượng {duration || 0} phút mỗi lượt.
+              </p>
+            </div>
+            <div className="doctor-note-card">
+              <p className="doctor-note">
+                Sức chứa tối đa hiện đặt là {soLuongToiDa} lịch hẹn và trạng thái đang là {scheduleStatus.label.toLowerCase()}.
+              </p>
+            </div>
+          </div>
+        </DoctorPanel>
       </div>
 
-      <div style={{ height: 12 }} />
-
-      <div className="card stack">
-        <div className="title">Khung giờ ngày {date}</div>
-        {slotsQuery.isLoading ? <div className="muted">Đang tải…</div> : null}
-        {slotsQuery.isError ? (
-          <div className="card" style={{ borderColor: 'rgba(239,68,68,0.6)' }}>
-            {getApiErrorMessage(slotsQuery.error)}
-          </div>
+      <DoctorPanel
+        title={`Khung giờ ngày ${formatLongDate(date)}`}
+        description="Danh sách slot đã sinh ra hoặc đang tồn tại cho ngày đang chọn."
+        aside={<span className="doctor-count-bubble">{slots.length}</span>}
+      >
+        {slotsQuery.isLoading ? (
+          <DoctorNotice tone="info" title="Đang tải slot làm việc" description="Hệ thống đang đồng bộ danh sách khung giờ đã có trong ngày này." />
         ) : null}
 
-        {(slotsQuery.data || []).length === 0 ? <div className="muted">Chưa có slot.</div> : null}
-        <div className="stack">
-          {(slotsQuery.data || []).map((s) => (
-            <div key={s.maChiTiet} className="row-between card">
-              <div>
-                <b>{s.gioBatDau.slice(0, 5)}–{s.gioKetThuc.slice(0, 5)}</b> • <span className="muted">{s.trangThai}</span>
-              </div>
-              <span className="chip">{s.trangThaiLich}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </>
+        {slotsQuery.isError ? (
+          <DoctorNotice tone="danger" title="Không thể tải slot làm việc" description={getApiErrorMessage(slotsQuery.error)} />
+        ) : null}
+
+        {!slotsQuery.isLoading && !slotsQuery.isError && slots.length === 0 ? (
+          <DoctorEmptyState
+            title="Ngày này chưa có slot làm việc"
+            description="Bạn có thể lưu cấu hình phía trên để bắt đầu tạo lịch nhận bệnh cho ngày đã chọn."
+          />
+        ) : null}
+
+        {slots.length > 0 ? (
+          <div className="doctor-list">
+            {slots.map((slot) => {
+              const slotState = getSlotStateMeta(slot.trangThai)
+              const scheduleState = getScheduleStatusMeta(slot.trangThaiLich)
+
+              return (
+                <article key={slot.maChiTiet} className="doctor-list-card">
+                  <div className="doctor-list-card__header">
+                    <div>
+                      <h3 className="doctor-list-card__title">{formatTimeRange(slot.gioBatDau, slot.gioKetThuc)}</h3>
+                      <p className="doctor-list-card__subtitle">Khung {slot.thoiLuongPhut} phút • Mã chi tiết #{slot.maChiTiet}</p>
+                    </div>
+                    <div className="doctor-chip-row">
+                      <DoctorStatusBadge label={slotState.label} tone={slotState.tone} />
+                      <DoctorStatusBadge label={scheduleState.label} tone={scheduleState.tone} />
+                    </div>
+                  </div>
+
+                  <div className="doctor-meta-list">
+                    <div className="doctor-meta-item">
+                      <span className="doctor-meta-item__label">Mã lịch làm việc</span>
+                      <div className="doctor-meta-item__value">#{slot.maLichLamViec}</div>
+                    </div>
+                    <div className="doctor-meta-item">
+                      <span className="doctor-meta-item__label">Mã khung giờ</span>
+                      <div className="doctor-meta-item__value">#{slot.maKhungGio}</div>
+                    </div>
+                    <div className="doctor-meta-item">
+                      <span className="doctor-meta-item__label">Khóa đến</span>
+                      <div className="doctor-meta-item__value">{slot.khoaDen || 'Không khóa'}</div>
+                    </div>
+                    <div className="doctor-meta-item">
+                      <span className="doctor-meta-item__label">Phiếu đặt hiện tại</span>
+                      <div className="doctor-meta-item__value">
+                        {slot.maPhieuDatLichHienTai ? `#${slot.maPhieuDatLichHienTai}` : 'Chưa có bệnh nhân'}
+                      </div>
+                    </div>
+                  </div>
+                </article>
+              )
+            })}
+          </div>
+        ) : null}
+      </DoctorPanel>
+    </div>
   )
 }
-
