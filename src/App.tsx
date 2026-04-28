@@ -1,6 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { useAuth } from './auth/AuthContext'
-import { RequireAuth } from './auth/RequireAuth'
 import { AdminLayout } from './layouts/AdminLayout'
 import { DoctorLayout } from './layouts/DoctorLayout'
 import { MemberLayout } from './layouts/MemberLayout'
@@ -32,6 +31,7 @@ import { WorkingSlotsPage } from './pages/member/WorkingSlotsPage'
 
 function IndexRoute() {
   const { session } = useAuth()
+  // Nếu chưa có session (chưa bấm đăng nhập giả) thì ở lại Landing
   if (!session) return <LandingPage />
 
   const role = (session.vaiTro || '').toUpperCase()
@@ -48,12 +48,11 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
 
+        {/* Cụm Route cho Member - Đã bỏ RequireAuth để bạn test UI sau khi Login */}
         <Route
           path="/app"
           element={
-            <RequireAuth>
-              <MemberLayout />
-            </RequireAuth>
+            <MemberLayout />
           }
         >
           <Route index element={<Navigate to="home" replace />} />
@@ -72,12 +71,11 @@ export default function App() {
           <Route path="account" element={<AccountPage />} />
         </Route>
 
+        {/* Cụm Route cho Doctor - Tương tự cũng bỏ RequireAuth */}
         <Route
           path="/doctor"
           element={
-            <RequireAuth>
-              <DoctorLayout />
-            </RequireAuth>
+            <DoctorLayout />
           }
         >
           <Route index element={<Navigate to="home" replace />} />
@@ -91,12 +89,11 @@ export default function App() {
           <Route path="account" element={<AccountPage />} />
         </Route>
 
+        {/* Cụm Route cho Admin */}
         <Route
           path="/admin"
           element={
-            <RequireAuth>
-              <AdminLayout />
-            </RequireAuth>
+            <AdminLayout />
           }
         >
           <Route index element={<Navigate to="pending-doctors" replace />} />
