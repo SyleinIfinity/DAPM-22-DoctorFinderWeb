@@ -594,3 +594,31 @@ a {
     width: 100%;
   }
 }
+.home-light {
+  --bg: #F6F8FA;
+  --surface: #ffffff;
+  --surface-2: #ffffff;
+  --border: #E5E7EB;
+  --text: #1A1A1A;
+  --muted: #6B7280;
+}
+
+/* Fix input bị xám */
+.home-light .input,
+.home-light input {
+  background: #fff !important;
+  color: #000 !important;
+  border: 1px solid #E5E7EB;
+}
+
+/* Card sáng */
+.home-light .card {
+  background: #fff;
+  border: 1px solid #eee;
+}
+
+/* Body riêng */
+.home-light-wrapper {
+  background: #F6F8FA;
+  min-height: 100vh;
+}

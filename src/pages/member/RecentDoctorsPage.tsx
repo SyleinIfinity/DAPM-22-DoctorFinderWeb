@@ -5,101 +5,71 @@ import { clearRecentDoctors, loadRecentDoctors } from '../../utils/recentDoctors
 
 export function RecentDoctorsPage() {
   const navigate = useNavigate()
-  
-  // Khởi tạo state từ localStorage
   const [list, setList] = useState(() => {
     const saved = loadRecentDoctors()
-    // Nếu chưa có dữ liệu thật, trả về mảng mẫu để test UI
-    if (saved.length === 0) {
-      return [
-        { 
-          maBacSi: 201, 
-          hoTenDayDu: "BS. Trương Hoàng Long", 
-          chuyenKhoa: "Răng Hàm Mặt", 
-          tenCoSoYTe: "BV Răng Hàm Mặt Trung Ương", 
-          diaChiLamViec: "Quận 1, TP.HCM" 
-        },
-        { 
-          maBacSi: 202, 
-          hoTenDayDu: "BS. Ngô Bảo Châu", 
-          chuyenKhoa: "Ngoại thần kinh", 
-          tenCoSoYTe: "Bệnh viện Chợ Rẫy", 
-          diaChiLamViec: "Quận 5, TP.HCM" 
-        }
-      ]
-    }
-    return saved
+    return saved.length === 0 ? [
+      { maBacSi: 201, hoTenDayDu: "BS. Trương Hoàng Long", chuyenKhoa: "Răng Hàm Mặt", tenCoSoYTe: "BV Răng Hàm Mặt Trung Ương", diaChiLamViec: "Quận 1, TP.HCM" },
+      { maBacSi: 202, hoTenDayDu: "BS. Ngô Bảo Châu", chuyenKhoa: "Ngoại thần kinh", tenCoSoYTe: "Bệnh viện Chợ Rẫy", diaChiLamViec: "Quận 5, TP.HCM" }
+    ] : saved
   })
-
-  const hasItems = useMemo(() => list.length > 0, [list.length])
 
   const handleClear = () => {
     if (window.confirm("Bạn có chắc chắn muốn xóa toàn bộ lịch sử xem?")) {
-      clearRecentDoctors()
-      setList([])
+      clearRecentDoctors(); setList([]);
     }
   }
 
   return (
-    <>
+    <div style={{ backgroundColor: '#F8FAFB', minHeight: '100vh' }}>
       <PageHeader 
         title="Bác sĩ vừa xem" 
-        right={<Link className="btn btn-ghost" to="/app/home">Trang chủ</Link>} 
+        right={<Link className="btn btn-ghost" to="/app/home" style={{ color: '#666', fontWeight: 'bold' }}>Trang chủ</Link>} 
       />
 
-      <div style={{ padding: '16px' }}>
-        {!hasItems ? (
-          <div className="card" style={{ textAlign: 'center', padding: '40px' }}>
-            <p className="muted">Chưa có bác sĩ vừa xem gần đây.</p>
-            <Link to="/app/home" className="btn btn-primary" style={{ marginTop: '12px' }}>
-              Tìm kiếm bác sĩ ngay
-            </Link>
-          </div>
-        ) : (
-          <>
-            {/* Thanh công cụ xóa lịch sử */}
-            <div className="row-between" style={{ marginBottom: '16px' }}>
-              <span className="muted">{list.length} bác sĩ đã xem</span>
-              <button
-                className="btn btn-danger-ghost"
-                type="button"
-                onClick={handleClear}
-                style={{ fontSize: '14px' }}
+      <div style={{ maxWidth: '800px', margin: '0 auto', padding: '20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <span style={{ color: '#888', fontSize: '14px' }}>{list.length} bác sĩ đã xem</span>
+          <button onClick={handleClear} style={{ background: '#fff', border: '1px solid #eee', padding: '8px 15px', borderRadius: '10px', cursor: 'pointer', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+            🗑 Xóa lịch sử
+          </button>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+          {list.map((d) => (
+            <div key={d.maBacSi} className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px', borderRadius: '24px', backgroundColor: '#fff', boxShadow: '0 4px 12px rgba(0,0,0,0.03)', border: '1px solid #f1f3f5' }}>
+              
+              <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+                {/* Avatar tròn bên trái */}
+                <div style={{ 
+                  width: '60px', height: '60px', borderRadius: '50%', backgroundColor: '#E6FFFA', 
+                  display: 'grid', placeItems: 'center', color: '#0D9488', fontWeight: 'bold', fontSize: '20px', flexShrink: 0 
+                }}>
+                  {d.hoTenDayDu.split(' ').pop()?.charAt(0)}
+                </div>
+
+                {/* Thông tin ở giữa */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <div style={{ fontWeight: '800', fontSize: '17px', color: '#24D5DB' }}>{d.hoTenDayDu}</div>
+                  <div style={{ fontSize: '14px', color: '#444' }}>
+                    <strong>{d.chuyenKhoa}</strong> • {d.tenCoSoYTe}
+                  </div>
+                  <div style={{ fontSize: '13px', color: '#888' }}>
+                    📍 {d.diaChiLamViec || '—'}
+                  </div>
+                </div>
+              </div>
+
+              {/* Nút Xem lại bên phải */}
+              <button 
+                onClick={() => navigate(`/app/doctors/${d.maBacSi}`)}
+                style={{ backgroundColor: '#24D5DB', color: '#fff', border: 'none', padding: '10px 22px', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer' }}
               >
-                🗑 Xóa lịch sử
+                Xem lại
               </button>
             </div>
-
-            {/* Danh sách Card */}
-            <div className="stack" style={{ gap: '12px' }}>
-              {list.map((d) => (
-                <div key={d.maBacSi} className="card row-between" style={{ alignItems: 'center' }}>
-                  <div className="stack" style={{ gap: 4 }}>
-                    <div style={{ fontWeight: 900, fontSize: '16px', color: '#24D5DB' }}>
-                      {d.hoTenDayDu}
-                    </div>
-                    <div className="muted" style={{ fontSize: '14px' }}>
-                      <strong>{d.chuyenKhoa}</strong> • {d.tenCoSoYTe}
-                    </div>
-                    <div className="muted" style={{ fontSize: '13px' }}>
-                      📍 {d.diaChiLamViec || '—'}
-                    </div>
-                  </div>
-                  
-                  <button 
-                    className="btn btn-primary" 
-                    type="button" 
-                    onClick={() => navigate(`/app/doctors/${d.maBacSi}`)}
-                    style={{ minWidth: '80px' }}
-                  >
-                    Xem lại
-                  </button>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
+          ))}
+        </div>
       </div>
-    </>
+    </div>
   )
 }

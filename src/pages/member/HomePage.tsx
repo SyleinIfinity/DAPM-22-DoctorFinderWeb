@@ -1,237 +1,194 @@
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { api } from '../../api/http'
-import type { DoctorImageSearchResult, DoctorProfile } from '../../api/types'
-import { useAuth } from '../../auth/AuthContext'
-import { PageHeader } from '../../components/PageHeader'
-import { getApiErrorMessage } from '../../utils/errors'
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 
-type SearchMode = 'TEXT' | 'IMAGE'
+export default function HomePage() {
+  const navigate = useNavigate();
+  const [searchValue, setSearchValue] = useState('');
+  const [image, setImage] = useState<string | null>(null);
 
-export function HomePage() {
-  const navigate = useNavigate()
-  const { session } = useAuth()
+  const specialties = [
+    { id: 1, name: 'Tim mạch', icon: '🩺', color: '#FFF0F3', iconColor: '#E91E63' },
+    { id: 2, name: 'Thần kinh', icon: '🧠', color: '#FFF9E5', iconColor: '#FFA000' },
+    { id: 3, name: 'Nha khoa', icon: '🦷', color: '#E5FBF9', iconColor: '#009688' },
+    { id: 4, name: 'Nhi khoa', icon: '🍼', color: '#E5F5FB', iconColor: '#03A9F4' },
+  ];
 
-  const [mode, setMode] = useState<SearchMode>('TEXT')
-  const [keyword, setKeyword] = useState('')
-  const [chuyenKhoa, setChuyenKhoa] = useState('')
-  const [diaChiLamViec, setDiaChiLamViec] = useState('')
-  const [imageFile, setImageFile] = useState<File | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [textResults, setTextResults] = useState<DoctorProfile[]>([])
-  const [imageResults, setImageResults] = useState<DoctorImageSearchResult[]>([])
+  const doctors = [
+    { id: 1, name: 'BS. Lê Bình', specialty: 'Nhi khoa' },
+    { id: 2, name: 'BS. Lê Bình', specialty: 'Nhi khoa' },
+    { id: 3, name: 'BS. Lê Bình', specialty: 'Nhi khoa' },
+  ];
 
-  async function searchText() {
-    setError(null)
-    setLoading(true)
-
-    // BƯỚC 1: Tạm thời tạo dữ liệu giả để hiện lên màn hình
-    const mockDoctors = [
-      {
-        maBacSi: 1,
-        hoTenDayDu: "BS. Nguyễn Văn A",
-        chuyenKhoa: "Nội tổng quát",
-        tenCoSoYTe: "Bệnh viện Chợ Rẫy",
-        diaChiLamViec: "Quận 5, TP.HCM",
-      },
-      {
-        maBacSi: 2,
-        hoTenDayDu: "BS. Trần Thị B",
-        chuyenKhoa: "Nhi khoa",
-        tenCoSoYTe: "Bệnh viện Nhi Đồng",
-        diaChiLamViec: "Quận 10, TP.HCM",
-      }
-    ]
-
-    // BƯỚC 2: Gán dữ liệu giả này vào state thay vì đợi API
-    setTimeout(() => {
-      setTextResults(mockDoctors as any)
-      setLoading(false)
-    }, 500) // Tạo độ trễ 0.5s cho giống thật
-  }
-  //Tạm thời bỏ API để bạn tập trung làm UI, sau này mình sẽ hướng dẫn cách gọi API thật để lấy dữ liệu bác sĩ dựa trên tiêu chí tìm kiếm
-  // async function searchText() {
-  //   setError(null)
-  //   setLoading(true)
-  //   try {
-  //     const res = await api.get<DoctorProfile[]>('/api/doctors/search', {
-  //       params: {
-  //         keyword: keyword.trim() || undefined,
-  //         chuyenKhoa: chuyenKhoa.trim() || undefined,
-  //         diaChiLamViec: diaChiLamViec.trim() || undefined,
-  //         trangThaiHoSo: 'DA_DUYET',
-  //         limit: 20,
-  //         offset: 0,
-  //       },
-  //     })
-  //     setTextResults(res.data || [])
-  //   } catch (err) {
-  //     setError(getApiErrorMessage(err))
-  //   } finally {
-  //     setLoading(false)
-  //   }
-  // }
-
-  async function searchByImage() {
-    setError(null)
-    setLoading(true)
-    try {
-      if (!imageFile) throw new Error('Vui lòng chọn ảnh')
-      const form = new FormData()
-      form.append('image', imageFile)
-      form.append('limit', '20')
-      const res = await api.post<DoctorImageSearchResult[]>(
-        '/api/doctors/search-by-image',
-        form,
-        { headers: { 'Content-Type': 'multipart/form-data' } },
-      )
-      setImageResults(res.data || [])
-    } catch (err) {
-      setError(getApiErrorMessage(err))
-    } finally {
-      setLoading(false)
-    }
-  }
+  // Thu hồi bộ nhớ khi ảnh thay đổi
+  useEffect(() => {
+    return () => {
+      if (image) URL.revokeObjectURL(image);
+    };
+  }, [image]);
 
   return (
-    <>
-      <PageHeader
-        title="Trang chính"
-        right={
-          session?.maBacSi && session?.vaiTro?.toUpperCase() !== 'BAC_SI' ? (
-            <Link className="chip" to="/app/doctor-status">
-              Hồ sơ bác sĩ: xem trạng thái
-            </Link>
-          ) : null
-        }
-      />
+    <div className="home-light-wrapper" style={{ backgroundColor: '#F4F7F8', minHeight: '100vh', paddingBottom: '80px' }}>
+      <div className="home-light container" style={{ maxWidth: '600px' }}>
 
-      <div className="card stack">
-        <div className="tabs">
-          <button
-            className={mode === 'TEXT' ? 'tab tab-active' : 'tab'}
-            onClick={() => setMode('TEXT')}
-            type="button"
+        {/* 1. HEADER */}
+        <div className="row-between" style={{ marginBottom: 25, marginTop: 10 }}>
+          <div>
+            <div style={{ fontSize: 26, fontWeight: 800, color: '#1A1A1A' }}>
+              👋 Xin chào, Huy
+            </div>
+            <div className="muted">Chăm sóc sức khoẻ mỗi ngày</div>
+          </div>
+
+          <div style={{ position: 'relative', fontSize: '24px', cursor: 'pointer' }}>
+            🔔
+            <span style={{
+              position: 'absolute', top: 0, right: 0, width: 9, height: 9,
+              background: '#FF4D4F', borderRadius: '50%', border: '2px solid #fff'
+            }} />
+          </div>
+        </div>
+
+        {/* 2. SEARCH + IMAGE UPLOAD */}
+        <div className="row" style={{ marginBottom: 8, gap: 10 }}>
+          <div style={{ position: 'relative', flex: 1 }}>
+            <span style={{ position: 'absolute', left: 15, top: '50%', transform: 'translateY(-50%)', color: '#AAA' }}>🔍</span>
+            <input
+              className="input"
+              style={{ paddingLeft: '45px', borderRadius: '20px', border: 'none', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', height: '50px' }}
+              placeholder="Tìm bác sĩ, bệnh, triệu chứng..."
+              value={searchValue}
+              onChange={(e) => setSearchValue(e.target.value)}
+            />
+          </div>
+          {/* Nút Tìm kiếm (Mới bổ sung) */}
+          <button 
+            onClick={() => console.log('Searching:', searchValue)}
+            className="btn btn-primary"
+            style={{ 
+              borderRadius: '15px', 
+              height: '50px', 
+              padding: '0 20px', 
+              fontWeight: '700',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}
           >
-            Tìm kiếm thường
+            Tìm
           </button>
-          <button
-            className={mode === 'IMAGE' ? 'tab tab-active' : 'tab'}
-            onClick={() => setMode('IMAGE')}
-            type="button"
+
+          <label className="btn btn-primary" style={{ cursor: 'pointer', width: '50px', height: '50px', borderRadius: '15px', display: 'grid', placeItems: 'center', padding: 0 }}>
+            📷
+            <input
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) setImage(URL.createObjectURL(file));
+              }}
+            />
+          </label>
+        </div>
+
+        {/* Preview ảnh khi chọn */}
+        {image && (
+          <div style={{ marginBottom: 15, position: 'relative', width: 'fit-content' }}>
+            <img src={image} alt="preview" style={{ width: 80, height: 80, borderRadius: 12, objectFit: 'cover', border: '2px solid #24D5DB' }} />
+            <button 
+              onClick={() => setImage(null)}
+              style={{ position: 'absolute', top: -5, right: -5, background: '#FF4D4F', color: '#fff', border: 'none', borderRadius: '50%', width: 22, height: 22, cursor: 'pointer', fontWeight: 'bold' }}
+            >
+              ×
+            </button>
+          </div>
+        )}
+
+        <div className="muted" style={{ marginBottom: 25, fontSize: '13px' }}>
+          🔍 Gợi ý: đau đầu → <b style={{ color: '#009688', cursor: 'pointer' }}>bác sĩ thần kinh</b>
+        </div>
+
+        {/* 3. ĐIỀU HƯỚNG NHANH (BỔ SUNG) */}
+        <div style={{ display: 'flex', gap: '12px', marginBottom: 30 }}>
+          <button 
+            onClick={() => navigate('/app/doctors/recent')}
+            className="card"
+            style={{ flex: 1, padding: '12px', border: 'none', fontWeight: '700', color: '#555', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
           >
-            Tìm kiếm thông minh (tải ảnh)
+            🕒 Bác sĩ vừa xem
+          </button>
+          <button 
+            onClick={() => navigate('/app/doctors/suggested')}
+            className="card"
+            style={{ flex: 1, padding: '12px', border: 'none', fontWeight: '700', color: '#555', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+          >
+            ✨ Bác sĩ gợi ý
           </button>
         </div>
 
-        {mode === 'TEXT' ? (
-          <>
-            <div className="stack">
-              <div className="label">Từ khóa / tên</div>
-              <input className="input" value={keyword} onChange={(e) => setKeyword(e.target.value)} />
-            </div>
-            <div className="grid">
-              <div className="stack">
-                <div className="label">Chuyên khoa</div>
-                <input className="input" value={chuyenKhoa} onChange={(e) => setChuyenKhoa(e.target.value)} />
+        {/* 4. CHUYÊN KHOA */}
+        <div className="row-between" style={{ marginBottom: 15 }}>
+          <div className="title" style={{ fontSize: '18px' }}>Chuyên khoa</div>
+          <div style={{ color: '#009688', cursor: 'pointer', fontWeight: '600', fontSize: '14px' }}>
+            Xem tất cả
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+          {specialties.map(s => (
+            <div key={s.id} style={{ textAlign: 'center', cursor: 'pointer' }}>
+              <div style={{
+                background: s.color, borderRadius: 18, height: 70, 
+                display: 'grid', placeItems: 'center', fontSize: 28,
+                transition: 'transform 0.2s'
+              }}>
+                <span style={{ color: s.iconColor }}>{s.icon}</span>
               </div>
-              <div className="stack">
-                <div className="label">Địa chỉ</div>
-                <input
-                  className="input"
-                  value={diaChiLamViec}
-                  onChange={(e) => setDiaChiLamViec(e.target.value)}
-                />
-              </div>
-              <div className="stack">
-                <div className="label">Hành động</div>
-                <button className="btn btn-primary" onClick={searchText} disabled={loading} type="button">
-                  {loading ? 'Đang tìm…' : 'Tìm kiếm'}
-                </button>
-              </div>
+              <div style={{ marginTop: 8, fontSize: '13px', fontWeight: '600', color: '#444' }}>{s.name}</div>
             </div>
-          </>
-        ) : (
-          <>
-            <div className="stack">
-              <div className="label">Tải ảnh lên để tìm kiếm</div>
-              <input
-                className="input"
-                type="file"
-                accept="image/*"
-                onChange={(e) => setImageFile(e.target.files?.[0] || null)}
-              />
+          ))}
+        </div>
+
+        {/* 5. PROMO BANNER (SMART SEARCH) */}
+        <div style={{
+          marginTop: 30, padding: '20px', borderRadius: '22px',
+          background: 'linear-gradient(135deg, #24D5DB, #00A8A8)',
+          color: '#fff', display: 'flex', alignItems: 'center', gap: '15px',
+          boxShadow: '0 8px 25px rgba(36, 213, 219, 0.3)'
+        }}>
+          <div style={{ fontSize: '32px', backgroundColor: 'rgba(0,0,0,0.1)', borderRadius: '50%', width: 55, height: 55, display: 'grid', placeItems: 'center' }}>💡</div>
+          <div style={{ flex: 1 }}>
+            <b style={{ fontSize: '16px' }}>Gợi ý cho bạn</b>
+            <div style={{ margin: '5px 0 12px', fontSize: '13px', opacity: 0.9 }}>
+              Bạn hay tìm "đau đầu" → khám ngay danh sách các bác sĩ thần kinh hàng đầu.
             </div>
-            <button className="btn btn-primary" onClick={searchByImage} disabled={loading} type="button">
-              {loading ? 'Đang tìm…' : 'Tìm kiếm'}
+            <button style={{ background: '#fff', color: '#24D5DB', border: 'none', padding: '8px 18px', borderRadius: '12px', fontWeight: '800', cursor: 'pointer', fontSize: '12px' }}>
+              XEM NGAY
             </button>
-          </>
-        )}
+          </div>
+        </div>
 
-        {error ? <div className="card" style={{ borderColor: 'rgba(239,68,68,0.6)' }}>{error}</div> : null}
+        {/* 6. BÁC SĨ GẦN ĐÂY */}
+        <div className="title" style={{ marginTop: 30, marginBottom: 15, fontSize: '18px' }}>
+          Bác sĩ tìm kiếm gần đây
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 15 }}>
+          {doctors.map(d => (
+            <div key={d.id} className="card" style={{ textAlign: 'center', border: 'none', borderRadius: '22px', padding: '15px', boxShadow: '0 4px 12px rgba(0,0,0,0.02)' }}>
+              <img
+                src="https://via.placeholder.com/150"
+                style={{ width: '100%', aspectRatio: '1/1', borderRadius: '15px', objectFit: 'cover', marginBottom: 10 }}
+              />
+              <div style={{ fontWeight: 800, fontSize: '14px', color: '#333' }}>
+                {d.name}
+              </div>
+              <div className="muted" style={{ fontSize: '12px', marginTop: '4px' }}>{d.specialty}</div>
+            </div>
+          ))}
+        </div>
+
       </div>
-
-      <div style={{ height: 12 }} />
-
-      <div className="card row">
-        <Link className="btn" to="/app/doctors/recent">
-          Bác sĩ vừa xem
-        </Link>
-        <Link className="btn" to="/app/doctors/suggested">
-          Bác sĩ gợi ý
-        </Link>
-      </div>
-
-      <div style={{ height: 12 }} />
-
-      <div className="stack">
-        {mode === 'TEXT' ? (
-          <>
-            {textResults.length === 0 ? (
-              <div className="muted">Chưa có kết quả. Hãy nhập tiêu chí và nhấn “Tìm kiếm”.</div>
-            ) : (
-              textResults.map((d) => (
-                <div key={d.maBacSi} className="card row-between">
-                  <div className="stack" style={{ gap: 4 }}>
-                    <div style={{ fontWeight: 900 }}>{d.hoTenDayDu}</div>
-                    <div className="muted">
-                      {d.chuyenKhoa} • {d.tenCoSoYTe}
-                    </div>
-                    <div className="muted">{d.diaChiLamViec || '—'}</div>
-                  </div>
-                  <button className="btn" type="button" onClick={() => navigate(`/app/doctors/${d.maBacSi}`)}>
-                    Xem
-                  </button>
-                </div>
-              ))
-            )}
-          </>
-        ) : (
-          <>
-            {imageResults.length === 0 ? (
-              <div className="muted">Chưa có kết quả. Hãy chọn ảnh và nhấn “Tìm kiếm”.</div>
-            ) : (
-              imageResults.map((r) => (
-                <div key={r.bacSi.maBacSi} className="card row-between">
-                  <div className="stack" style={{ gap: 4 }}>
-                    <div style={{ fontWeight: 900 }}>{r.bacSi.hoTenDayDu}</div>
-                    <div className="muted">
-                      {r.bacSi.chuyenKhoa} • {r.bacSi.tenCoSoYTe}
-                    </div>
-                    <div className="muted">
-                      Similarity: <b>{Math.round(r.similarityScore * 100)}%</b>
-                    </div>
-                  </div>
-                  <button className="btn" type="button" onClick={() => navigate(`/app/doctors/${r.bacSi.maBacSi}`)}>
-                    Xem
-                  </button>
-                </div>
-              ))
-            )}
-          </>
-        )}
-      </div>
-    </>
-  )
+    </div>
+  );
 }

@@ -22,12 +22,13 @@ import { ChooseKnownDoctorPage } from "./pages/member/ChooseKnownDoctorPage";
 import { DoctorStatusPage } from "./pages/member/DoctorStatusPage";
 import { DoctorDetailPage } from "./pages/member/DoctorDetailPage";
 import { FollowsPage } from "./pages/member/FollowsPage";
-import { HomePage } from "./pages/member/HomePage";
+import HomePage from './pages/member/HomePage';
 import { ChatPage } from "./pages/member/ChatPage";
 import { MessagesPage } from "./pages/member/MessagesPage";
 import { RecentDoctorsPage } from "./pages/member/RecentDoctorsPage";
 import { SuggestedDoctorsPage } from "./pages/member/SuggestedDoctorsPage";
 import { WorkingSlotsPage } from "./pages/member/WorkingSlotsPage";
+import { CreateAppointmentPage } from "./pages/member/CreateAppointmentPage";
 
 function IndexRoute() {
   const { session } = useAuth();
@@ -69,6 +70,7 @@ export default function App() {
           <Route path="doctors/suggested" element={<SuggestedDoctorsPage />} />
           <Route path="doctors/:maBacSi" element={<DoctorDetailPage />} />
           <Route path="doctors/:maBacSi/slots" element={<WorkingSlotsPage />} />
+          <Route path="/app/appointments/new" element={<CreateAppointmentPage />} />
           <Route path="appointments" element={<AppointmentsPage />} />
           <Route
             path="appointments/new/known"

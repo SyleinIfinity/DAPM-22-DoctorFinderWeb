@@ -7,24 +7,18 @@ import { PageHeader } from '../../components/PageHeader'
 
 type Scope = 'upcoming' | 'history'
 
-function normalizeTime(value: string): string {
-  if (!value) return ''
-  return value.length >= 5 ? value.slice(0, 5) : value
+function normalizeTime(value: string | null): string {
+  if (!value) return '--:--'
+  return value.slice(0, 5)
 }
 
-// Hàm bổ trợ để lấy màu sắc và text hiển thị theo trạng thái phiếu
-function getStatusStyles(status: string) {
+function getStatusStyles(status: string | null) {
   switch (status) {
-    case 'CHO_DUYET': 
-        return { color: '#ffc107', bg: 'rgba(255, 193, 7, 0.1)', label: 'Chờ duyệt' }
-    case 'DA_XAC_NHAN': 
-        return { color: '#24D5DB', bg: 'rgba(36, 213, 219, 0.1)', label: 'Đã xác nhận' }
-    case 'TU_CHOI': 
-        return { color: '#ff4d4f', bg: 'rgba(255, 77, 79, 0.1)', label: 'Đã từ chối' }
-    case 'THANH_CONG': 
-        return { color: '#52c41a', bg: 'rgba(82, 196, 26, 0.1)', label: 'Hoàn thành' }
-    default: 
-        return { color: '#999', bg: 'rgba(153, 153, 153, 0.1)', label: status }
+    case 'CHO_DUYET': return { color: '#FAAD14', bg: '#FFFBE6', border: '#FFE58F', label: 'Chờ duyệt' }
+    case 'DA_XAC_NHAN': return { color: '#13C2C2', bg: '#E6FFFB', border: '#87E8DE', label: 'Sắp tới' }
+    case 'THANH_CONG': return { color: '#52C41A', bg: '#F6FFED', border: '#B7EB8F', label: 'Hoàn thành' }
+    case 'TU_CHOI': return { color: '#FF4D4F', bg: '#FFF1F0', border: '#FFA39E', label: 'Đã từ chối' }
+    default: return { color: '#8C8C8C', bg: '#F5F5F5', border: '#D9D9D9', label: 'Không xác định' }
   }
 }
 
@@ -32,205 +26,93 @@ export function AppointmentsPage() {
   const navigate = useNavigate()
   const { session } = useAuth()
   const maNguoiDung = session?.maNguoiDung ?? null
-
   const [scope, setScope] = useState<Scope>('upcoming')
   const [showCreate, setShowCreate] = useState(false)
 
-  // --- MOCK DATA ĐỂ TEST UI NHANH ---
-  // Thêm "as any" vào cuối mảng để bỏ qua kiểm tra kiểu nghiêm ngặt lúc làm Mock
   const mockUpcoming: AppointmentSummary[] = [
-    {
-      maPhieuDatLich: 1,
-      hoTenBacSi: "BS. Nguyễn Văn A",
-      ngayCuThe: "2026-05-10",
-      gioBatDau: "08:00:00",
-      gioKetThuc: "09:00:00",
-      trangThaiPhieu: "DA_XAC_NHAN",
-      lyDoTuChoi: null
-    },
-
-    {
-      maPhieuDatLich: 2,
-      hoTenBacSi: "BS. Trần Thị B",
-      ngayCuThe: "2026-05-15",
-      gioBatDau: "14:30:00",
-      gioKetThuc: "15:30:00",
-      trangThaiPhieu: "CHO_DUYET",
-      lyDoTuChoi: null
-    }
-  ]as any;
+    { maPhieuDatLich: 1, hoTenBacSi: "BS. Nguyễn Thanh Tùng", ngayCuThe: "2026-05-10", gioBatDau: "08:30:00", gioKetThuc: "09:00:00", trangThaiPhieu: "DA_XAC_NHAN" },
+    { maPhieuDatLich: 2, hoTenBacSi: "BS. Lê Minh Nhân", ngayCuThe: "2026-05-15", gioBatDau: "14:00:00", gioKetThuc: "14:30:00", trangThaiPhieu: "CHO_DUYET" }
+  ] as any;
 
   const mockHistory: AppointmentSummary[] = [
-    {
-      maPhieuDatLich: 3,
-      hoTenBacSi: "BS. Lê Văn C",
-      ngayCuThe: "2026-04-20",
-      gioBatDau: "10:00:00",
-      gioKetThuc: "11:00:00",
-      trangThaiPhieu: "THANH_CONG",
-      lyDoTuChoi: null
-    },
-    {
-      maPhieuDatLich: 4,
-      hoTenBacSi: "BS. Phạm Minh D",
-      ngayCuThe: "2026-04-10",
-      gioBatDau: "09:00:00",
-      gioKetThuc: "10:00:00",
-      trangThaiPhieu: "TU_CHOI",
-      lyDoTuChoi: "Bác sĩ bận lịch công tác đột xuất"
-    }
+    { maPhieuDatLich: 3, hoTenBacSi: "BS. Phạm Hòa", ngayCuThe: "2026-04-20", gioBatDau: "10:00:00", gioKetThuc: "10:30:00", trangThaiPhieu: "THANH_CONG" }
   ] as any;
 
   const query = useQuery({
     queryKey: ['appointments', maNguoiDung, scope],
-    queryFn: async () => {
-        // TẠM THỜI TRẢ VỀ MOCK DATA ĐỂ LÀM UI
-        return scope === 'upcoming' ? mockUpcoming : mockHistory;
-
-        // KHI NÀO CÓ API THÌ DÙNG DÒNG DƯỚI:
-        // return (await api.get<AppointmentSummary[]>('/api/appointments', { params: { maNguoiDung, scope } })).data
-    },
-    enabled: true, 
+    queryFn: async () => scope === 'upcoming' ? mockUpcoming : mockHistory,
   })
 
   const list = useMemo(() => query.data || [], [query.data])
 
   return (
-    <div style={{ paddingBottom: '30px' }}>
-      <PageHeader
-        title="Lịch hẹn của tôi"
-        right={
-          <button 
-            className="btn btn-primary" 
-            type="button" 
-            onClick={() => setShowCreate(true)}
-            style={{ width: '40px', height: '40px', borderRadius: '50%', padding: 0, fontSize: '1.5rem', display: 'grid', placeItems: 'center' }}
-          >
-            +
-          </button>
-        }
+    <div style={{ backgroundColor: '#F4F7F8', minHeight: '100vh', paddingBottom: '100px' }}>
+      <PageHeader 
+        title="Lịch hẹn của tôi" 
+        right={<button onClick={() => setShowCreate(true)} style={{ border: 'none', background: '#24D5DB', color: '#fff', width: 38, height: 38, borderRadius: '50%', fontSize: 24, cursor: 'pointer' }}>+</button>} 
       />
 
-      {/* TABS Dark Mode */}
-      <div className="card" style={{ padding: '4px', backgroundColor: '#1a222d', display: 'flex', gap: '4px', marginBottom: '16px', borderRadius: '12px' }}>
-        <button
-          className={scope === 'upcoming' ? 'tab tab-active' : 'tab'}
-          style={{ flex: 1, borderRadius: '10px', border: 'none', transition: '0.3s', cursor: 'pointer' }}
-          onClick={() => setScope('upcoming')}
-        >
-          Sắp tới
-        </button>
-        <button
-          className={scope === 'history' ? 'tab tab-active' : 'tab'}
-          style={{ flex: 1, borderRadius: '10px', border: 'none', transition: '0.3s', cursor: 'pointer' }}
-          onClick={() => setScope('history')}
-        >
-          Lịch sử
-        </button>
-      </div>
-
-      {query.isLoading && <div className="muted" style={{ textAlign: 'center', padding: '20px' }}>Đang tải lịch hẹn…</div>}
-      
-      {list.length === 0 && !query.isLoading && (
-        <div className="muted" style={{ textAlign: 'center', marginTop: '40px' }}>
-          Bạn chưa có phiếu đặt lịch nào ở mục này.
+      <div style={{ maxWidth: '600px', margin: '0 auto', padding: '10px 20px' }}>
+        <div style={{ display: 'flex', backgroundColor: '#E5E7EB', padding: '4px', borderRadius: '15px', marginBottom: '25px' }}>
+          <button onClick={() => setScope('upcoming')} style={{ flex: 1, padding: '10px', border: 'none', borderRadius: '12px', fontWeight: '800', backgroundColor: scope === 'upcoming' ? '#fff' : 'transparent', color: scope === 'upcoming' ? '#24D5DB' : '#6B7280', cursor: 'pointer' }}>Sắp tới</button>
+          <button onClick={() => setScope('history')} style={{ flex: 1, padding: '10px', border: 'none', borderRadius: '12px', fontWeight: '800', backgroundColor: scope === 'history' ? '#fff' : 'transparent', color: scope === 'history' ? '#24D5DB' : '#6B7280', cursor: 'pointer' }}>Lịch sử</button>
         </div>
-      )}
 
-      {/* DANH SÁCH LỊCH HẸN */}
-      <div className="stack" style={{ gap: '12px' }}>
-        {list.map((a) => {
-          const status = getStatusStyles(a.trangThaiPhieu);
-          return (
-            <div 
-              key={a.maPhieuDatLich} 
-              className="card" 
-              style={{ 
-                borderLeft: `4px solid ${status.color}`,
-                cursor: 'pointer',
-                transition: 'transform 0.2s'
-              }}
-              onClick={() => navigate(`/app/appointments/${a.maPhieuDatLich}`)}
-              onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.01)'}
-              onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-            >
-              <div className="row-between" style={{ alignItems: 'center' }}>
-                <div className="stack" style={{ gap: 4 }}>
-                  <div style={{ fontWeight: 900, fontSize: '1.1rem' }}>{a.hoTenBacSi}</div>
-                  <div className="muted" style={{ fontSize: '0.9rem' }}>
-                    📅 {a.ngayCuThe} | ⏰ {normalizeTime(a.gioBatDau)}–{normalizeTime(a.gioKetThuc)}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+          {list.map((a) => {
+            const status = getStatusStyles(a.trangThaiPhieu);
+            const dateParts = (a.ngayCuThe || "----/--/--").split('-'); 
+            
+            return (
+              <div 
+                key={a.maPhieuDatLich}
+                onClick={() => navigate(`/app/appointments/${a.maPhieuDatLich}`)}
+                style={{
+                  backgroundColor: '#fff', borderRadius: '24px', padding: '20px',
+                  boxShadow: '0 8px 20px rgba(0,0,0,0.03)', cursor: 'pointer',
+                  border: '1px solid #F1F3F5', position: 'relative'
+                }}
+              >
+                <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+                  {/* Khối Ngày tháng */}
+                  <div style={{ backgroundColor: '#F0FDFA', borderRadius: '18px', padding: '10px', minWidth: '65px', textAlign: 'center', border: '1px solid #CCFBF1' }}>
+                    <div style={{ fontSize: '11px', color: '#0D9488', fontWeight: '800' }}>THG {dateParts[1]}</div>
+                    <div style={{ fontSize: '22px', fontWeight: '900', color: '#0D9488' }}>{dateParts[2]}</div>
                   </div>
-                  <div style={{ display: 'flex', gap: '8px', marginTop: '4px', flexWrap: 'wrap', alignItems: 'center' }}>
-                    <span style={{ 
-                      padding: '2px 10px', 
-                      borderRadius: '12px', 
-                      fontSize: '0.7rem', 
-                      fontWeight: 'bold',
-                      backgroundColor: status.bg, 
-                      color: status.color,
-                      border: `1px solid ${status.color}`,
-                      textTransform: 'uppercase'
-                    }}>
-                      {status.label}
-                    </span>
-                    {a.lyDoTuChoi && (
-                      <span className="muted" style={{ fontSize: '0.75rem', fontStyle: 'italic' }}>
-                        Lý do: {a.lyDoTuChoi}
-                      </span>
-                    )}
+
+                  {/* Thông tin ở giữa */}
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: '800', fontSize: '16px', color: '#1A1A1A' }}>{a.hoTenBacSi}</div>
+                    <div style={{ fontSize: '13px', color: '#6B7280', marginTop: '4px' }}>
+                      ⏰ {normalizeTime(a.gioBatDau)} - {normalizeTime(a.gioKetThuc)}
+                    </div>
                   </div>
                 </div>
-                <button className="btn" style={{ borderRadius: '10px', padding: '8px 16px' }}>Chi tiết</button>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '15px', paddingTop: '15px', borderTop: '1px dotted #EEE' }}>
+                  <div style={{ padding: '4px 12px', borderRadius: '8px', fontSize: '11px', fontWeight: 'bold', backgroundColor: status.bg, color: status.color, border: `1px solid ${status.border}` }}>
+                    {status.label.toUpperCase()}
+                  </div>
+                  
+                  {/* NÚT CHI TIẾT ĐÃ THÊM TẠI ĐÂY */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', color: '#24D5DB', fontWeight: 'bold' }}>
+                    Xem chi tiết <span style={{ fontSize: '16px' }}>›</span>
+                  </div>
+                </div>
               </div>
-            </div>
-          )
-        })}
+            );
+          })}
+        </div>
       </div>
 
-      {/* MODAL tạo mới */}
+      {/* MODAL (GIỮ NGUYÊN) */}
       {showCreate && (
-        <div
-          onClick={() => setShowCreate(false)}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.8)',
-            display: 'grid',
-            placeItems: 'center',
-            padding: 16,
-            zIndex: 1000,
-            backdropFilter: 'blur(5px)'
-          }}
-        >
-          <div
-            className="card stack"
-            onClick={(e) => e.stopPropagation()}
-            style={{ width: 'min(380px, 100%)', textAlign: 'center', padding: '30px', borderRadius: '20px' }}
-          >
-            <div className="title" style={{ fontSize: '1.5rem', marginBottom: '8px' }}>Tạo phiếu mới</div>
-            <p className="muted" style={{ marginBottom: '20px' }}>Bạn muốn đặt lịch khám với ai?</p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <button
-                className="btn btn-primary"
-                style={{ padding: '14px', fontWeight: 'bold', borderRadius: '12px' }}
-                onClick={() => navigate('/app/home')}
-              >
-                Tìm bác sĩ mới
-              </button>
-              <button
-                className="btn"
-                style={{ padding: '14px', fontWeight: 'bold', border: '1px solid #333', borderRadius: '12px' }}
-                onClick={() => navigate('/app/appointments/new/known')}
-              >
-                Bác sĩ đã từng khám
-              </button>
-              <button 
-                className="btn" 
-                style={{ marginTop: '10px', color: '#888' }} 
-                onClick={() => setShowCreate(false)}
-              >
-                Hủy bỏ
-              </button>
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', display: 'grid', placeItems: 'center', zIndex: 1000 }} onClick={() => setShowCreate(false)}>
+          <div style={{ backgroundColor: '#fff', width: '90%', maxWidth: '380px', borderRadius: '28px', padding: '30px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontWeight: '900', marginBottom: '10px' }}>Đặt lịch mới</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '20px' }}>
+              <button onClick={() => navigate('/app/home')} style={{ padding: '15px', borderRadius: '15px', border: 'none', backgroundColor: '#24D5DB', color: '#fff', fontWeight: 'bold', cursor: 'pointer' }}>🔍 Tìm bác sĩ chuyên khoa</button>
+              <button onClick={() => navigate('/app/appointments/new/known')} style={{ padding: '15px', borderRadius: '15px', border: '1px solid #E5E7EB', backgroundColor: '#F9FAFB', color: '#374151', fontWeight: 'bold', cursor: 'pointer' }}>👤 Bác sĩ đã từng khám</button>
             </div>
           </div>
         </div>
