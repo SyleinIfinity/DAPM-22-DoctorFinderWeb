@@ -25,24 +25,53 @@ export function HomePage() {
   async function searchText() {
     setError(null)
     setLoading(true)
-    try {
-      const res = await api.get<DoctorProfile[]>('/api/doctors/search', {
-        params: {
-          keyword: keyword.trim() || undefined,
-          chuyenKhoa: chuyenKhoa.trim() || undefined,
-          diaChiLamViec: diaChiLamViec.trim() || undefined,
-          trangThaiHoSo: 'DA_DUYET',
-          limit: 20,
-          offset: 0,
-        },
-      })
-      setTextResults(res.data || [])
-    } catch (err) {
-      setError(getApiErrorMessage(err))
-    } finally {
+
+    // BƯỚC 1: Tạm thời tạo dữ liệu giả để hiện lên màn hình
+    const mockDoctors = [
+      {
+        maBacSi: 1,
+        hoTenDayDu: "BS. Nguyễn Văn A",
+        chuyenKhoa: "Nội tổng quát",
+        tenCoSoYTe: "Bệnh viện Chợ Rẫy",
+        diaChiLamViec: "Quận 5, TP.HCM",
+      },
+      {
+        maBacSi: 2,
+        hoTenDayDu: "BS. Trần Thị B",
+        chuyenKhoa: "Nhi khoa",
+        tenCoSoYTe: "Bệnh viện Nhi Đồng",
+        diaChiLamViec: "Quận 10, TP.HCM",
+      }
+    ]
+
+    // BƯỚC 2: Gán dữ liệu giả này vào state thay vì đợi API
+    setTimeout(() => {
+      setTextResults(mockDoctors as any)
       setLoading(false)
-    }
+    }, 500) // Tạo độ trễ 0.5s cho giống thật
   }
+  //Tạm thời bỏ API để bạn tập trung làm UI, sau này mình sẽ hướng dẫn cách gọi API thật để lấy dữ liệu bác sĩ dựa trên tiêu chí tìm kiếm
+  // async function searchText() {
+  //   setError(null)
+  //   setLoading(true)
+  //   try {
+  //     const res = await api.get<DoctorProfile[]>('/api/doctors/search', {
+  //       params: {
+  //         keyword: keyword.trim() || undefined,
+  //         chuyenKhoa: chuyenKhoa.trim() || undefined,
+  //         diaChiLamViec: diaChiLamViec.trim() || undefined,
+  //         trangThaiHoSo: 'DA_DUYET',
+  //         limit: 20,
+  //         offset: 0,
+  //       },
+  //     })
+  //     setTextResults(res.data || [])
+  //   } catch (err) {
+  //     setError(getApiErrorMessage(err))
+  //   } finally {
+  //     setLoading(false)
+  //   }
+  // }
 
   async function searchByImage() {
     setError(null)
