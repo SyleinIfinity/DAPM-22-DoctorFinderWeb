@@ -45,18 +45,28 @@ export function WorkingSlotsPage() {
   const [trieuChung, setTrieuChung] = useState('')
   const [error, setError] = useState<string | null>(null)
 
-  const doctorQuery = useQuery({
-    queryKey: ['doctor', maBacSi],
-    queryFn: async () => (await api.get<DoctorProfile>(`/api/doctors/${maBacSi}`)).data,
-    enabled: Number.isFinite(maBacSi) && maBacSi > 0,
-  })
+  // 1. Giả lập thông tin bác sĩ
+const doctorQuery = useQuery({
+  queryKey: ['doctor', maBacSi],
+  queryFn: async () => ({
+    hoTenDayDu: "BS. Nguyễn Văn A",
+    chuyenKhoa: "Nội tổng quát",
+  } as DoctorProfile),
+  enabled: true, // Ép nó luôn chạy
+})
 
-  const slotsQuery = useQuery({
-    queryKey: ['working-slots', maBacSi, date],
-    queryFn: async () =>
-      (await api.get<WorkingSlot[]>(`/api/doctors/${maBacSi}/working-slots`, { params: { date } })).data,
-    enabled: Number.isFinite(maBacSi) && maBacSi > 0 && !!date,
-  })
+// 2. Giả lập danh sách khung giờ
+const slotsQuery = useQuery({
+  queryKey: ['working-slots', maBacSi, date],
+  queryFn: async () => ([
+    { maChiTiet: 1, gioBatDau: "08:00", gioKetThuc: "09:00", trangThai: "TRONG", trangThaiLich: "SAP_DIEN_RA" },
+    { maChiTiet: 2, gioBatDau: "09:00", gioKetThuc: "10:00", trangThai: "TRONG", trangThaiLich: "SAP_DIEN_RA" },
+    { maChiTiet: 3, gioBatDau: "10:00", gioKetThuc: "11:00", trangThai: "DA_DAT", trangThaiLich: "SAP_DIEN_RA" },
+    { maChiTiet: 4, gioBatDau: "14:00", gioKetThuc: "15:00", trangThai: "TRONG", trangThaiLich: "SAP_DIEN_RA" },
+    { maChiTiet: 5, gioBatDau: "15:00", gioKetThuc: "16:00", trangThai: "TRONG", trangThaiLich: "SAP_DIEN_RA" },
+  ] as WorkingSlot[]),
+  enabled: true,
+})
 
   const sortedSlots = useMemo(() => {
     const slots = slotsQuery.data || []
@@ -83,96 +93,152 @@ export function WorkingSlotsPage() {
 
   if (!Number.isFinite(maBacSi) || maBacSi <= 0) {
     return (
-      <>
+      <div style={{ padding: '20px' }}>
         <PageHeader title="Lịch làm việc" />
-        <div className="card">URL không hợp lệ.</div>
-      </>
+        <div className="card" style={{ textAlign: 'center', color: '#ff4d4f' }}>URL không hợp lệ.</div>
+      </div>
     )
   }
 
   return (
-    <>
-      <PageHeader title="Chọn lịch" right={<Link to={`/app/doctors/${maBacSi}`}>Hồ sơ bác sĩ</Link>} />
+    <div style={{ paddingBottom: '40px' }}>
+      <PageHeader 
+        title="Chọn lịch" 
+        right={<Link to={`/app/doctors/${maBacSi}`} style={{ color: '#24D5DB', textDecoration: 'none' }}>Hồ sơ bác sĩ</Link>} 
+      />
 
       <div className="card stack">
-        <div className="row-between">
+        <div className="row-between" style={{ alignItems: 'flex-start' }}>
           <div className="stack" style={{ gap: 4 }}>
-            <div style={{ fontWeight: 900 }}>{doctorQuery.data?.hoTenDayDu || 'Bác sĩ'}</div>
-            <div className="muted">{doctorQuery.data?.chuyenKhoa || ''}</div>
+            <div style={{ fontWeight: 900, fontSize: '1.2rem' }}>{doctorQuery.data?.hoTenDayDu || 'Đang tải...'}</div>
+            <div style={{ color: '#24D5DB', fontWeight: '500' }}>{doctorQuery.data?.chuyenKhoa || ''}</div>
           </div>
-          <input className="input" style={{ width: 180 }} type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          <div className="stack" style={{ gap: 4, alignItems: 'flex-end' }}>
+            <div className="label">Chọn ngày</div>
+            <input 
+              className="input" 
+              style={{ width: 160, backgroundColor: '#1a222d', color: '#fff', border: '1px solid #333' }} 
+              type="date" 
+              value={date} 
+              onChange={(e) => setDate(e.target.value)} 
+            />
+          </div>
         </div>
+
+        <div style={{ height: 20 }} />
+        <div className="label" style={{ marginBottom: 10 }}>Khung giờ khả dụng</div>
 
         {slotsQuery.isLoading ? <div className="muted">Đang tải khung giờ…</div> : null}
-        {slotsQuery.isError ? (
-          <div className="card" style={{ borderColor: 'rgba(239,68,68,0.6)' }}>
-            {getApiErrorMessage(slotsQuery.error)}
+        
+        {sortedSlots.length === 0 && !slotsQuery.isLoading ? (
+          <div className="muted" style={{ textAlign: 'center', padding: '20px' }}>Không có khung giờ khả dụng cho ngày này.</div>
+        ) : (
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))', 
+            gap: '10px' 
+          }}>
+            {sortedSlots.map((s) => {
+              const ok = slotAvailable(s)
+              const active = selected?.maChiTiet === s.maChiTiet
+              return (
+                <button
+                  key={s.maChiTiet}
+                  type="button"
+                  disabled={!ok}
+                  onClick={() => setSelected(s)}
+                  style={{
+                    padding: '12px 8px',
+                    borderRadius: '12px',
+                    border: active ? 'none' : '1px solid #333',
+                    backgroundColor: active ? '#24D5DB' : '#1a222d',
+                    color: active ? '#fff' : (ok ? '#ccc' : '#555'),
+                    cursor: ok ? 'pointer' : 'not-allowed',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '4px',
+                    transition: 'all 0.2s',
+                    boxShadow: active ? '0 4px 12px rgba(36, 213, 219, 0.3)' : 'none'
+                  }}
+                >
+                  <span style={{ fontWeight: 'bold' }}>{normalizeTime(s.gioBatDau)}</span>
+                  <span style={{ fontSize: '0.7rem', opacity: 0.7 }}>{ok ? 'TRỐNG' : s.trangThai}</span>
+                </button>
+              )
+            })}
           </div>
-        ) : null}
-
-        {sortedSlots.length === 0 ? <div className="muted">Không có khung giờ khả dụng.</div> : null}
-
-        <div className="stack">
-          {sortedSlots.map((s) => {
-            const ok = slotAvailable(s)
-            const active = selected?.maChiTiet === s.maChiTiet
-            return (
-              <button
-                key={s.maChiTiet}
-                className={active ? 'btn btn-primary' : 'btn'}
-                type="button"
-                disabled={!ok}
-                onClick={() => setSelected(s)}
-                style={{ justifyContent: 'space-between', display: 'flex' }}
-              >
-                <span>
-                  {normalizeTime(s.gioBatDau)}–{normalizeTime(s.gioKetThuc)}
-                </span>
-                <span className="muted">
-                  {ok ? 'TRỐNG' : s.trangThai}
-                </span>
-              </button>
-            )
-          })}
-        </div>
+        )}
       </div>
 
-      <div style={{ height: 12 }} />
+      <div style={{ height: 20 }} />
 
       <div className="card stack">
-        <div className="title">Tạo phiếu đặt lịch</div>
+        <h3 style={{ margin: '0 0 15px 0', fontSize: '1.1rem', borderBottom: '1px solid #333', paddingBottom: '10px' }}>
+          Thông tin phiếu đặt lịch
+        </h3>
+        
         {!maNguoiDung ? (
-          <div className="muted">Thiếu maNguoiDung trong session. Hãy đăng nhập lại.</div>
+          <div style={{ color: '#ff4d4f', fontSize: '0.9rem' }}>⚠️ Bạn cần đăng nhập để thực hiện đặt lịch.</div>
         ) : null}
 
         <div className="grid">
           <div className="stack">
             <div className="label">Loại phiếu</div>
-            <input className="input" value={loaiPhieu} onChange={(e) => setLoaiPhieu(e.target.value)} />
-          </div>
-          <div className="stack">
-            <div className="label">Mô tả triệu chứng (tùy chọn)</div>
-            <input className="input" value={trieuChung} onChange={(e) => setTrieuChung(e.target.value)} />
-          </div>
-          <div className="stack">
-            <div className="label">Hành động</div>
-            <button
-              className="btn btn-primary"
-              type="button"
-              disabled={!maNguoiDung || !selected || createAppointmentMutation.isPending}
-              onClick={() => {
-                setError(null)
-                createAppointmentMutation.mutate()
-              }}
+            <select 
+              className="input" 
+              style={{ backgroundColor: '#1a222d', color: '#fff', border: '1px solid #333' }}
+              value={loaiPhieu} 
+              onChange={(e) => setLoaiPhieu(e.target.value)}
             >
-              {createAppointmentMutation.isPending ? 'Đang gửi…' : 'Gửi yêu cầu'}
-            </button>
+              <option value="KHAM">Khám bệnh</option>
+              <option value="TU_VAN">Tư vấn từ xa</option>
+              <option value="TAI_KHAM">Tái khám</option>
+            </select>
+          </div>
+          <div className="stack">
+            <div className="label">Ghi chú triệu chứng</div>
+            <input 
+              className="input" 
+              style={{ backgroundColor: '#1a222d', color: '#fff', border: '1px solid #333' }}
+              placeholder="Ví dụ: Đau đầu, sốt..." 
+              value={trieuChung} 
+              onChange={(e) => setTrieuChung(e.target.value)} 
+            />
           </div>
         </div>
 
-        {error ? <div className="card" style={{ borderColor: 'rgba(239,68,68,0.6)' }}>{error}</div> : null}
+        <div style={{ height: 10 }} />
+        
+        <button
+          className="btn"
+          type="button"
+          disabled={!maNguoiDung || !selected || createAppointmentMutation.isPending}
+          onClick={() => {
+            setError(null)
+            createAppointmentMutation.mutate()
+          }}
+          style={{
+            backgroundColor: (maNguoiDung && selected) ? '#24D5DB' : '#333',
+            color: '#fff',
+            fontWeight: 'bold',
+            padding: '14px',
+            borderRadius: '12px',
+            border: 'none',
+            fontSize: '1rem',
+            cursor: (maNguoiDung && selected) ? 'pointer' : 'not-allowed',
+            transition: 'all 0.3s'
+          }}
+        >
+          {createAppointmentMutation.isPending ? 'Đang xử lý yêu cầu...' : 'XÁC NHẬN ĐẶT LỊCH'}
+        </button>
+
+        {error ? (
+          <div className="card" style={{ borderColor: '#ff4d4f', color: '#ff4d4f', marginTop: '15px', fontSize: '0.9rem' }}>
+            {error}
+          </div>
+        ) : null}
       </div>
-    </>
+    </div>
   )
 }
-
