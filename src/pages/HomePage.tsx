@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 
 const HomePage = () => {
   const [searchMode, setSearchMode] = useState<'text' | 'image'>('text');

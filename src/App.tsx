@@ -1,43 +1,55 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
-import { useAuth } from './auth/AuthContext'
-import { AdminLayout } from './layouts/AdminLayout'
-import { DoctorLayout } from './layouts/DoctorLayout'
-import { MemberLayout } from './layouts/MemberLayout'
-import { AdminAccountsPage } from './pages/admin/AdminAccountsPage'
-import { AdminAccountDetailPage } from './pages/admin/AdminAccountDetailPage'
-import { AdminDoctorDetailPage } from './pages/admin/AdminDoctorDetailPage'
-import { AdminPendingDoctorsPage } from './pages/admin/AdminPendingDoctorsPage'
-import { DoctorDocumentsPage } from './pages/doctor/DoctorDocumentsPage'
-import { DoctorHomePage } from './pages/doctor/DoctorHomePage'
-import { DoctorRequestsPage } from './pages/doctor/DoctorRequestsPage'
-import { DoctorSchedulePage } from './pages/doctor/DoctorSchedulePage'
-import { DoctorWorkspacePage } from './pages/doctor/DoctorWorkspacePage'
-import { LandingPage } from './pages/LandingPage'
-import { LoginPage } from './pages/LoginPage'
-import { RegisterPage } from './pages/RegisterPage'
-import { AccountPage } from './pages/member/AccountPage'
-import { AppointmentDetailPage } from './pages/member/AppointmentDetailPage'
-import { AppointmentsPage } from './pages/member/AppointmentsPage'
-import { ChooseKnownDoctorPage } from './pages/member/ChooseKnownDoctorPage'
-import { DoctorStatusPage } from './pages/member/DoctorStatusPage'
-import { DoctorDetailPage } from './pages/member/DoctorDetailPage'
-import { FollowsPage } from './pages/member/FollowsPage'
-import { HomePage } from './pages/member/HomePage'
-import { ChatPage } from './pages/member/ChatPage'
-import { MessagesPage } from './pages/member/MessagesPage'
-import { RecentDoctorsPage } from './pages/member/RecentDoctorsPage'
-import { SuggestedDoctorsPage } from './pages/member/SuggestedDoctorsPage'
-import { WorkingSlotsPage } from './pages/member/WorkingSlotsPage'
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { useAuth } from "./auth/AuthContext";
+import { AdminLayout } from "./layouts/AdminLayout";
+import { DoctorLayout } from "./layouts/DoctorLayout";
+import { MemberLayout } from "./layouts/MemberLayout";
+import { AdminAccountsPage } from "./pages/admin/AdminAccountsPage";
+import { AdminAccountDetailPage } from "./pages/admin/AdminAccountDetailPage";
+import { AdminDoctorDetailPage } from "./pages/admin/AdminDoctorDetailPage";
+import { AdminPendingDoctorsPage } from "./pages/admin/AdminPendingDoctorsPage";
+import { DoctorDocumentsPage } from "./pages/doctor/DoctorDocumentsPage";
+import { DoctorHomePage } from "./pages/doctor/DoctorHomePage";
+import { DoctorRequestsPage } from "./pages/doctor/DoctorRequestsPage";
+import { DoctorSchedulePage } from "./pages/doctor/DoctorSchedulePage";
+import { DoctorWorkspacePage } from "./pages/doctor/DoctorWorkspacePage";
+import { LandingPage } from "./pages/LandingPage";
+import { LoginPage } from "./pages/LoginPage";
+import { RegisterPage } from "./pages/RegisterPage";
+import { AccountPage } from "./pages/member/AccountPage";
+import { AppointmentDetailPage } from "./pages/member/AppointmentDetailPage";
+import { AppointmentsPage } from "./pages/member/AppointmentsPage";
+import { ChooseKnownDoctorPage } from "./pages/member/ChooseKnownDoctorPage";
+import { DoctorStatusPage } from "./pages/member/DoctorStatusPage";
+import { DoctorDetailPage } from "./pages/member/DoctorDetailPage";
+import { FollowsPage } from "./pages/member/FollowsPage";
+import { HomePage } from "./pages/member/HomePage";
+import { ChatPage } from "./pages/member/ChatPage";
+import { MessagesPage } from "./pages/member/MessagesPage";
+import { RecentDoctorsPage } from "./pages/member/RecentDoctorsPage";
+import { SuggestedDoctorsPage } from "./pages/member/SuggestedDoctorsPage";
+import { WorkingSlotsPage } from "./pages/member/WorkingSlotsPage";
 
 function IndexRoute() {
-  const { session } = useAuth()
+  const { session } = useAuth();
   // Nếu chưa có session (chưa bấm đăng nhập giả) thì ở lại Landing
-  if (!session) return <LandingPage />
+  if (!session) return <LandingPage />;
 
-  const role = (session.vaiTro || '').toUpperCase()
-  if (role === 'BAC_SI') return <Navigate to="/doctor/home" replace />
-  if (role === 'ADMIN' || role === 'QUAN_TRI_VIEN') return <Navigate to="/admin/pending-doctors" replace />
-  return <Navigate to="/app/home" replace />
+  const role = (session.vaiTro || "").toUpperCase();
+  if (role === "BAC_SI")
+    return (
+      <Navigate
+        to={session.activePortal === "doctor" ? "/doctor/home" : "/app/home"}
+        replace
+      />
+    );
+  if (role === "ADMIN" || role === "QUAN_TRI_VIEN")
+    return <Navigate to="/admin/pending-doctors" replace />;
+  return (
+    <Navigate
+      to={session.activePortal === "doctor" ? "/doctor/home" : "/app/home"}
+      replace
+    />
+  );
 }
 
 export default function App() {
@@ -49,12 +61,7 @@ export default function App() {
         <Route path="/register" element={<RegisterPage />} />
 
         {/* Cụm Route cho Member - Đã bỏ RequireAuth để bạn test UI sau khi Login */}
-        <Route
-          path="/app"
-          element={
-            <MemberLayout />
-          }
-        >
+        <Route path="/app" element={<MemberLayout />}>
           <Route index element={<Navigate to="home" replace />} />
           <Route path="home" element={<HomePage />} />
           <Route path="doctor-status" element={<DoctorStatusPage />} />
@@ -63,8 +70,14 @@ export default function App() {
           <Route path="doctors/:maBacSi" element={<DoctorDetailPage />} />
           <Route path="doctors/:maBacSi/slots" element={<WorkingSlotsPage />} />
           <Route path="appointments" element={<AppointmentsPage />} />
-          <Route path="appointments/new/known" element={<ChooseKnownDoctorPage />} />
-          <Route path="appointments/:maPhieuDatLich" element={<AppointmentDetailPage />} />
+          <Route
+            path="appointments/new/known"
+            element={<ChooseKnownDoctorPage />}
+          />
+          <Route
+            path="appointments/:maPhieuDatLich"
+            element={<AppointmentDetailPage />}
+          />
           <Route path="follows" element={<FollowsPage />} />
           <Route path="messages" element={<MessagesPage />} />
           <Route path="messages/:maCuocHoiThoai" element={<ChatPage />} />
@@ -72,12 +85,7 @@ export default function App() {
         </Route>
 
         {/* Cụm Route cho Doctor - Tương tự cũng bỏ RequireAuth */}
-        <Route
-          path="/doctor"
-          element={
-            <DoctorLayout />
-          }
-        >
+        <Route path="/doctor" element={<DoctorLayout />}>
           <Route index element={<Navigate to="home" replace />} />
           <Route path="home" element={<DoctorHomePage />} />
           <Route path="workspace" element={<DoctorWorkspacePage />} />
@@ -90,21 +98,19 @@ export default function App() {
         </Route>
 
         {/* Cụm Route cho Admin */}
-        <Route
-          path="/admin"
-          element={
-            <AdminLayout />
-          }
-        >
+        <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<Navigate to="pending-doctors" replace />} />
           <Route path="pending-doctors" element={<AdminPendingDoctorsPage />} />
           <Route path="doctors/:maBacSi" element={<AdminDoctorDetailPage />} />
           <Route path="accounts" element={<AdminAccountsPage />} />
-          <Route path="accounts/:maTaiKhoan" element={<AdminAccountDetailPage />} />
+          <Route
+            path="accounts/:maTaiKhoan"
+            element={<AdminAccountDetailPage />}
+          />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
-  )
+  );
 }

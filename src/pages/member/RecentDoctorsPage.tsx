@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { PageHeader } from '../../components/PageHeader'
 import { clearRecentDoctors, loadRecentDoctors } from '../../utils/recentDoctors'

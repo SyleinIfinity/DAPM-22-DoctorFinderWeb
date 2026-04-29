@@ -1,23 +1,24 @@
-import { Navigate, Outlet } from 'react-router-dom'
-import { useAuth } from '../auth/AuthContext'
-import { DoctorSidebar } from '../components/DoctorSidebar'
-import '../pages/doctor/doctor.css'
+import { Navigate, Outlet } from "react-router-dom";
+import { useAuth } from "../auth/AuthContext";
+import { DoctorSidebar } from "../components/DoctorSidebar";
+import "../pages/doctor/doctor.css";
 
 export function DoctorLayout() {
-  const { session } = useAuth()
-  const role = (session?.vaiTro || '').toUpperCase()
+  const { session } = useAuth();
+  const role = (session?.vaiTro || "").toUpperCase();
 
-  if (role !== 'BAC_SI') return <Navigate to="/app/home" replace />
+  if (role !== "BAC_SI" || session?.activePortal !== "doctor")
+    return <Navigate to="/app/home" replace />;
 
   return (
     <div className="doctor-layout doctor-layout--with-sidebar">
       <DoctorSidebar
         items={[
-          { to: '/doctor/home',      label: 'Tổng quan' },
-          { to: '/doctor/requests',  label: 'Lịch hẹn' },
-          { to: '/doctor/workspace', label: 'Điều phối' },
-          { to: '/doctor/messages',  label: 'Tin nhắn' },
-          { to: '/doctor/account',   label: 'Tài khoản' },
+          { to: "/doctor/home", label: "Tổng quan" },
+          { to: "/doctor/requests", label: "Lịch hẹn" },
+          { to: "/doctor/workspace", label: "Điều phối" },
+          { to: "/doctor/messages", label: "Tin nhắn" },
+          { to: "/doctor/account", label: "Tài khoản" },
         ]}
       />
       <main className="doctor-layout__main">
@@ -26,5 +27,5 @@ export function DoctorLayout() {
         </div>
       </main>
     </div>
-  )
+  );
 }

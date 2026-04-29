@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 // import { api } from '../../api/http'
 // import type { Message } from '../../api/types'
 import { useAuth } from '../../auth/AuthContext'
@@ -22,7 +22,6 @@ function normalizeTime(value: string): string {
 
 export function ChatPage() {
   const params = useParams()
-  const qc = useQueryClient()
   const { session } = useAuth()
 
   const role = (session?.vaiTro || '').toUpperCase()

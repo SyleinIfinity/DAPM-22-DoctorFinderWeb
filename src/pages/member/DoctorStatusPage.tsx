@@ -1,9 +1,8 @@
-import { Link } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
-import { api } from '../../api/http'
-import type { AccountDoctorInfo } from '../../api/types'
-import { useAuth } from '../../auth/AuthContext'
-import { getApiErrorMessage } from '../../utils/errors'
+import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
+import { api } from "../../api/http";
+import type { AccountDoctorInfo } from "../../api/types";
+import { useAuth } from "../../auth/AuthContext";
 import {
   DoctorAvatar,
   DoctorEmptyState,
@@ -13,63 +12,57 @@ import {
   DoctorStatCard,
   DoctorStatusBadge,
   getProfileStatusMeta,
-} from '../doctor/doctorUi'
+} from "../doctor/doctorUi";
 
 function getActivityStatusMeta(status: string | null | undefined) {
   switch (status) {
-    case 'HOAT_DONG':   return { label: 'Đang hoạt động', tone: 'success' as const }
-    case 'BI_KHOA':     return { label: 'Tài khoản bị khóa', tone: 'danger' as const }
-    case 'CHO_DUYET':   return { label: 'Chờ kích hoạt', tone: 'warning' as const }
-    default:            return { label: status ?? 'Chưa xác định', tone: 'neutral' as const }
+    case "HOAT_DONG":
+      return { label: "Đang hoạt động", tone: "success" as const };
+    case "BI_KHOA":
+      return { label: "Tài khoản bị khóa", tone: "danger" as const };
+    case "CHO_DUYET":
+      return { label: "Chờ kích hoạt", tone: "warning" as const };
+    default:
+      return { label: status ?? "Chưa xác định", tone: "neutral" as const };
   }
 }
 
 export function DoctorStatusPage() {
-  const { session } = useAuth()
-  
-  // FIX: Gán mặc định là 1 để vượt qua lỗi "Thiếu phiên đăng nhập" trong ảnh image_a7c2f6.png
-  const maTaiKhoan = session?.maTaiKhoan ?? 1 
+  const { session } = useAuth();
+  const maTaiKhoan = session?.maTaiKhoan ?? null;
 
   const query = useQuery({
-    queryKey: ['doctor-status', maTaiKhoan],
+    queryKey: ["doctor-status", maTaiKhoan],
     queryFn: async () => {
-      // --- DỮ LIỆU MẪU ĐỂ XEM GIAO DIỆN ---
-      await new Promise(resolve => setTimeout(resolve, 800)); // Giả lập chờ 0.8s
-
-      return {
-        data: {
-          hoLot: "Nguyễn Văn",
-          ten: "Nhân",
-          email: "nhan.doctor@example.com",
-          trangThaiHoatDong: "HOAT_DONG", 
-          trangThaiHoSo: "CHO_DUYET",     // Đổi thành 'DA_DUYET' hoặc 'TU_CHOI' để xem màu khác
-          coTaiKhoanBacSi: true,          // Đổi thành false để xem giao diện "Chưa mở hồ sơ"
-          maBacSi: 10293,
-          chuyenKhoa: "Nội khoa chuyên sâu",
-          tenCoSoYTe: "Bệnh viện Đa khoa Thành phố",
-          maChungChiHanhNghe: "CCHN-123456789",
-          maTaiKhoan: maTaiKhoan
-        }
-      };
+      if (!maTaiKhoan) throw new Error("Thiếu phiên đăng nhập");
+      const data = await api.get<AccountDoctorInfo>(
+        `/api/auth/account/${maTaiKhoan}/doctor`,
+      );
+      return data;
     },
-    enabled: true, // Luôn bật để xem UI mẫu
-  })
+    enabled: !!maTaiKhoan,
+  });
 
-  // Lấy dữ liệu từ cấu trúc mock ở trên
-  const rawData = query.data?.data
-  const activityStatus = rawData ? getActivityStatusMeta(rawData.trangThaiHoatDong) : null
-  const profileStatus  = rawData?.trangThaiHoSo ? getProfileStatusMeta(rawData.trangThaiHoSo) : null
+  const rawData = query.data?.data ?? null;
+  const activityStatus = rawData
+    ? getActivityStatusMeta(rawData.trangThaiHoatDong)
+    : null;
+  const profileStatus = rawData?.trangThaiHoSo
+    ? getProfileStatusMeta(rawData.trangThaiHoSo)
+    : null;
 
   return (
     <div className="doctor-page">
-
       {/* ── Tiêu đề ── */}
       <DoctorPageHeading
         eyebrow="Account"
         title="Trạng thái hồ sơ"
         description="Thông tin tài khoản và hồ sơ bác sĩ liên kết với phiên đăng nhập hiện tại."
         actions={
-          <Link className="doctor-button doctor-button--secondary doctor-button-link" to="/app/account">
+          <Link
+            className="doctor-button doctor-button--secondary doctor-button-link"
+            to="/app/account"
+          >
             Chỉnh sửa hồ sơ
           </Link>
         }
@@ -80,7 +73,7 @@ export function DoctorStatusPage() {
         <DoctorNotice
           tone="info"
           title="Đang tải thông tin"
-          description="Hệ thống đang tổng hợp dữ liệu hồ sơ mẫu cho bạn xem..."
+          description="Hệ thống đang lấy dữ liệu hồ sơ từ backend..."
         />
       ) : null}
 
@@ -89,7 +82,9 @@ export function DoctorStatusPage() {
           {/* ── Hero: Thông tin chính ── */}
           <section className="doctor-hero">
             <div className="doctor-hero__content">
-              <div className="doctor-hero__eyebrow">Thông tin tài khoản mẫu</div>
+              <div className="doctor-hero__eyebrow">
+                Thông tin tài khoản mẫu
+              </div>
               <h2 className="doctor-hero__title">
                 {rawData.hoLot} {rawData.ten}
               </h2>
@@ -102,9 +97,21 @@ export function DoctorStatusPage() {
                 >
                   Xem hồ sơ công khai
                 </Link>
-                <button className="doctor-button doctor-button--secondary" onClick={() => alert('Chức năng này cần API thật')}>
-                   Quản lý minh chứng
-                </button>
+                {rawData.coTaiKhoanBacSi ? (
+                  <Link
+                    className="doctor-button doctor-button--secondary doctor-button-link"
+                    to="/doctor/documents"
+                  >
+                    Quản lý minh chứng
+                  </Link>
+                ) : (
+                  <Link
+                    className="doctor-button doctor-button--secondary doctor-button-link"
+                    to="/register"
+                  >
+                    Mở tài khoản bác sĩ
+                  </Link>
+                )}
               </div>
             </div>
 
@@ -112,7 +119,9 @@ export function DoctorStatusPage() {
               <div className="doctor-profile-strip">
                 <DoctorAvatar name={`${rawData.hoLot} ${rawData.ten}`} />
                 <div>
-                  <h3 className="doctor-profile-strip__name">{rawData.hoLot} {rawData.ten}</h3>
+                  <h3 className="doctor-profile-strip__name">
+                    {rawData.hoLot} {rawData.ten}
+                  </h3>
                   <p className="doctor-profile-strip__meta">
                     {rawData.chuyenKhoa}
                     <br />
@@ -122,17 +131,24 @@ export function DoctorStatusPage() {
               </div>
 
               {activityStatus && (
-                <DoctorStatusBadge label={activityStatus.label} tone={activityStatus.tone} />
+                <DoctorStatusBadge
+                  label={activityStatus.label}
+                  tone={activityStatus.tone}
+                />
               )}
 
               <div className="doctor-keyfacts">
                 <div className="doctor-keyfact">
                   <span className="doctor-keyfact__label">Mã hồ sơ bác sĩ</span>
-                  <span className="doctor-keyfact__value">#{rawData.maBacSi}</span>
+                  <span className="doctor-keyfact__value">
+                    #{rawData.maBacSi}
+                  </span>
                 </div>
                 <div className="doctor-keyfact">
                   <span className="doctor-keyfact__label">Mã CCHN</span>
-                  <span className="doctor-keyfact__value">{rawData.maChungChiHanhNghe}</span>
+                  <span className="doctor-keyfact__value">
+                    {rawData.maChungChiHanhNghe}
+                  </span>
                 </div>
               </div>
             </div>
@@ -142,22 +158,22 @@ export function DoctorStatusPage() {
           <section className="doctor-metrics-grid">
             <DoctorStatCard
               label="Tài khoản"
-              value={activityStatus?.label ?? '—'}
+              value={activityStatus?.label ?? "—"}
               hint="Trạng thái truy cập hệ thống."
             />
             <DoctorStatCard
               label="Hồ sơ bác sĩ"
-              value={profileStatus?.label ?? '—'}
-              hint={profileStatus?.description ?? 'Kiểm tra hồ sơ định kỳ.'}
+              value={profileStatus?.label ?? "—"}
+              hint={profileStatus?.description ?? "Kiểm tra hồ sơ định kỳ."}
             />
             <DoctorStatCard
               label="Chuyên khoa"
-              value={rawData.chuyenKhoa}
+              value={rawData.chuyenKhoa ?? "Chưa cập nhật"}
               hint="Hiển thị với bệnh nhân."
             />
             <DoctorStatCard
               label="Cơ sở y tế"
-              value={rawData.tenCoSoYTe}
+              value={rawData.tenCoSoYTe ?? "Chưa cập nhật"}
               hint="Bệnh viện đang công tác."
             />
           </section>
@@ -168,45 +184,93 @@ export function DoctorStatusPage() {
               <DoctorPanel
                 title="Dữ liệu hồ sơ hiện tại"
                 description="Các thông tin này được quản trị viên dùng để xét duyệt năng lực."
-                aside={profileStatus && <DoctorStatusBadge label={profileStatus.label} tone={profileStatus.tone} />}
+                aside={
+                  profileStatus && (
+                    <DoctorStatusBadge
+                      label={profileStatus.label}
+                      tone={profileStatus.tone}
+                    />
+                  )
+                }
               >
                 <div className="doctor-meta-list">
                   <div className="doctor-meta-item">
-                    <span className="doctor-meta-item__label">Họ tên bác sĩ</span>
-                    <div className="doctor-meta-item__value">{rawData.hoLot} {rawData.ten}</div>
+                    <span className="doctor-meta-item__label">
+                      Họ tên bác sĩ
+                    </span>
+                    <div className="doctor-meta-item__value">
+                      {rawData.hoLot} {rawData.ten}
+                    </div>
                   </div>
                   <div className="doctor-meta-item">
-                    <span className="doctor-meta-item__label">Mã chứng chỉ</span>
-                    <div className="doctor-meta-item__value">{rawData.maChungChiHanhNghe}</div>
+                    <span className="doctor-meta-item__label">
+                      Mã chứng chỉ
+                    </span>
+                    <div className="doctor-meta-item__value">
+                      {rawData.maChungChiHanhNghe}
+                    </div>
                   </div>
                   <div className="doctor-meta-item">
-                    <span className="doctor-meta-item__label">Nơi công tác</span>
-                    <div className="doctor-meta-item__value">{rawData.tenCoSoYTe}</div>
+                    <span className="doctor-meta-item__label">
+                      Nơi công tác
+                    </span>
+                    <div className="doctor-meta-item__value">
+                      {rawData.tenCoSoYTe}
+                    </div>
                   </div>
                 </div>
                 <div className="doctor-divider" />
-                <button className="doctor-button doctor-button--ghost" onClick={() => alert('Chỉnh sửa tại trang Account')}>
+                <button
+                  className="doctor-button doctor-button--ghost"
+                  onClick={() => alert("Chỉnh sửa tại trang Account")}
+                >
                   Yêu cầu cập nhật thông tin
                 </button>
               </DoctorPanel>
 
-              <DoctorPanel title="Thông tin hướng dẫn" description="Dành cho bác sĩ mới.">
-                 <div className="doctor-note-card">
-                    <p className="doctor-note"><strong>Lưu ý:</strong> Khi hồ sơ ở trạng thái Chờ duyệt, bạn chỉ có thể xem, không thể sửa đổi thông tin.</p>
-                 </div>
+              <DoctorPanel
+                title="Thông tin hướng dẫn"
+                description="Dành cho bác sĩ mới."
+              >
+                <div className="doctor-note-card">
+                  <p className="doctor-note">
+                    <strong>Lưu ý:</strong> Khi hồ sơ ở trạng thái Chờ duyệt,
+                    bạn chỉ có thể xem, không thể sửa đổi thông tin.
+                  </p>
+                </div>
               </DoctorPanel>
             </div>
           ) : (
             <DoctorPanel title="Hồ sơ bác sĩ">
               <DoctorEmptyState
                 title="Bạn chưa có hồ sơ bác sĩ"
-                description="Hãy nâng cấp tài khoản để bắt đầu hành nghề trên DoctorFinder."
-                action={<Link className="doctor-button doctor-button--primary doctor-button-link" to="/app/account">Đăng ký ngay</Link>}
+                description={
+                  rawData.trangThaiHoSo === "CHO_DUYET"
+                    ? "Hồ sơ đang chờ duyệt."
+                    : "Hãy mở tài khoản bác sĩ để bắt đầu hành nghề trên DoctorFinder."
+                }
+                action={
+                  rawData.trangThaiHoSo === "CHO_DUYET" ? (
+                    <Link
+                      className="doctor-button doctor-button--primary doctor-button-link"
+                      to="/app/account"
+                    >
+                      Quay lại hồ sơ cá nhân
+                    </Link>
+                  ) : (
+                    <Link
+                      className="doctor-button doctor-button--primary doctor-button-link"
+                      to="/register"
+                    >
+                      Mở tài khoản bác sĩ
+                    </Link>
+                  )
+                }
               />
             </DoctorPanel>
           )}
         </>
       ) : null}
     </div>
-  )
+  );
 }

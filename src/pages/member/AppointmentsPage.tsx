@@ -1,11 +1,9 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { api } from '../../api/http'
 import type { AppointmentSummary } from '../../api/types'
 import { useAuth } from '../../auth/AuthContext'
 import { PageHeader } from '../../components/PageHeader'
-import { getApiErrorMessage } from '../../utils/errors'
 
 type Scope = 'upcoming' | 'history'
 

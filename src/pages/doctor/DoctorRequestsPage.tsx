@@ -60,9 +60,6 @@ export function DoctorRequestsPage() {
   const pendingCount = useMemo(() => requests.filter((request) => request.trangThaiPhieu === 'CHO_XAC_NHAN').length, [requests])
   const approvedCount = useMemo(() => requests.filter((request) => request.trangThaiPhieu === 'DA_DUYET').length, [requests])
   const rejectedCount = useMemo(() => requests.filter((request) => request.trangThaiPhieu === 'TU_CHOI').length, [requests])
-  const symptomCount = useMemo(() => requests.filter((request) => Boolean(request.trieuChungGhiChu?.trim())).length, [requests])
-
-  const uniquePatients = useMemo(() => new Set(requests.map((request) => request.maNguoiDung)).size, [requests])
 
   const approve = useMutation({
     mutationFn: async (maPhieuDatLich: number) => {

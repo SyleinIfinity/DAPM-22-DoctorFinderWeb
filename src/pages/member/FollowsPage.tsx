@@ -1,7 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../api/http'
-import type { FollowedDoctor } from '../../api/types'
 import { useAuth } from '../../auth/AuthContext'
 import { PageHeader } from '../../components/PageHeader'
 import { getApiErrorMessage } from '../../utils/errors'

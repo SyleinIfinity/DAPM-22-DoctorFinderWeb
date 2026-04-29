@@ -1,230 +1,466 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api } from '../../api/http'
-import type { AccountDoctorInfo } from '../../api/types'
-import { useAuth } from '../../auth/AuthContext'
-import { PageHeader } from '../../components/PageHeader'
-import { getApiErrorMessage } from '../../utils/errors'
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { api } from "../../api/http";
+import type { AccountDoctorInfo, DoctorProfile } from "../../api/types";
+import { useAuth } from "../../auth/AuthContext";
+import { PageHeader } from "../../components/PageHeader";
+import { createInitials } from "../doctor/doctorUi";
+import {
+  DoctorAvatar,
+  DoctorNotice,
+  DoctorPageHeading,
+  DoctorPanel,
+  DoctorStatCard,
+  DoctorStatusBadge,
+  getProfileStatusMeta,
+} from "../doctor/doctorUi";
+import { getApiErrorMessage } from "../../utils/errors";
 
+type UserForm = {
+  hoLot: string;
+  ten: string;
+  soDienThoai: string;
+  email: string;
+  cccd: string;
+  anhDaiDien: string;
+};
 
-const USER_FIELDS = [
-  { k: 'hoLot', label: 'Họ lót' },
-  { k: 'ten', label: 'Tên' },
-  { k: 'soDienThoai', label: 'Số điện thoại' },
-  { k: 'email', label: 'Email' },
-  { k: 'cccd', label: 'CCCD' },
-  { k: 'anhDaiDien', label: 'Ảnh đại diện (URL, tùy chọn)' },
-]
-
-const DOCTOR_FIELDS = [
-  { k: 'chuyenKhoa', label: 'Chuyên khoa' },
-  { k: 'trinhDoChuyenMon', label: 'Trình độ chuyên môn' },
-  { k: 'loaiHinhBacSi', label: 'Loại hình bác sĩ' },
-  { k: 'tenCoSoYTe', label: 'Cơ sở y tế' },
-  { k: 'diaChiLamViec', label: 'Địa chỉ làm việc (tùy chọn)' },
-  { k: 'maChungChiHanhNghe', label: 'Mã chứng chỉ hành nghề' },
-]
+const USER_FIELDS: Array<{
+  k: keyof UserForm;
+  label: string;
+  editable?: boolean;
+}> = [
+  { k: "hoLot", label: "Họ lót" },
+  { k: "ten", label: "Tên" },
+  { k: "soDienThoai", label: "Số điện thoại" },
+  { k: "email", label: "Email" },
+  { k: "cccd", label: "CCCD" },
+];
 
 export function AccountPage() {
-  const navigate = useNavigate()
-  const qc = useQueryClient()
-  const { session, logout } = useAuth()
+  const qc = useQueryClient();
+  const { session, setActivePortal } = useAuth();
 
-  const maTaiKhoan = session?.maTaiKhoan ?? null
-  const maNguoiDung = session?.maNguoiDung ?? null
+  const maTaiKhoan = session?.maTaiKhoan ?? null;
+  const maNguoiDung = session?.maNguoiDung ?? null;
+  const activePortal = session?.activePortal ?? "member";
+  const role = (session?.vaiTro || "").toUpperCase();
+  const isDoctorContext = activePortal === "doctor" || role === "BAC_SI";
 
-  const [userForm, setUserForm] = useState<any>({
-    hoLot: '', ten: '', soDienThoai: '', email: '', cccd: '', anhDaiDien: '',
-  })
-  const [doctorForm, setDoctorForm] = useState<any>({
-    chuyenKhoa: '', trinhDoChuyenMon: '', loaiHinhBacSi: '', tenCoSoYTe: '',
-    diaChiLamViec: '', maChungChiHanhNghe: '', moTaBanThan: '',
-  })
-  const [uploads, setUploads] = useState<{ tieuDe: string; file: File }[]>([])
+  const [userForm, setUserForm] = useState<UserForm>({
+    hoLot: "",
+    ten: "",
+    soDienThoai: "",
+    email: "",
+    cccd: "",
+    anhDaiDien: "",
+  });
+  const [snapshot, setSnapshot] = useState<UserForm | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const memberAccountQuery = useQuery({
+    queryKey: ["account", maTaiKhoan],
+    queryFn: async () =>
+      (
+        await api.get<AccountDoctorInfo>(
+          `/api/auth/account/${maTaiKhoan}/doctor`,
+        )
+      ).data,
+    enabled: !!maTaiKhoan && !isDoctorContext,
+  });
 
-  // --- Lấy dữ liệu tài khoản ---
-  const accountQuery = useQuery({
-    queryKey: ['account', maTaiKhoan],
-    queryFn: async () => (await api.get<AccountDoctorInfo>(`/api/auth/account/${maTaiKhoan}/doctor`)).data,
-    enabled: !!maTaiKhoan,
-  })
+  const doctorProfileQuery = useQuery({
+    queryKey: ["doctor-account-profile", maTaiKhoan],
+    queryFn: async () =>
+      (await api.get<DoctorProfile>(`/api/doctors/by-account/${maTaiKhoan}`))
+        .data,
+    enabled: !!maTaiKhoan && isDoctorContext,
+  });
 
   useEffect(() => {
-    if (!accountQuery.data) return
-    const d = accountQuery.data
-    setUserForm({
-      hoLot: d.hoLot || '',
-      ten: d.ten || '',
-      soDienThoai: d.soDienThoai || '',
-      email: d.email || '',
-      cccd: d.cccd || '',
-      anhDaiDien: d.anhDaiDien || '',
-    })
-    if (d.coTaiKhoanBacSi) {
-      setDoctorForm({
-        chuyenKhoa: d.chuyenKhoa || '',
-        trinhDoChuyenMon: d.trinhDoChuyenMon || '',
-        loaiHinhBacSi: d.loaiHinhBacSi || '',
-        tenCoSoYTe: d.tenCoSoYTe || '',
-        diaChiLamViec: d.diaChiLamViec || '',
-        maChungChiHanhNghe: d.maChungChiHanhNghe || '',
-        moTaBanThan: d.moTaBanThan || '',
-      })
-    }
-  }, [accountQuery.data])
+    if (!memberAccountQuery.data) return;
+    const d = memberAccountQuery.data;
+    const next: UserForm = {
+      hoLot: d.hoLot || "",
+      ten: d.ten || "",
+      soDienThoai: d.soDienThoai || "",
+      email: d.email || "",
+      cccd: d.cccd || "",
+      anhDaiDien: d.anhDaiDien || "",
+    };
+    setUserForm(next);
+    setSnapshot(next);
+    setAvatarPreview(null);
+  }, [memberAccountQuery.data]);
 
   // --- Logic cập nhật User ---
   const updateUserMutation = useMutation({
     mutationFn: async () => {
-      if (!maNguoiDung) throw new Error('Thiếu maNguoiDung')
-      await api.put(`/api/users/${maNguoiDung}`, { ...userForm })
+      if (!maNguoiDung) throw new Error("Thiếu maNguoiDung");
+      await api.put(`/api/users/${maNguoiDung}`, { ...userForm });
     },
     onSuccess: () => {
-      alert('Cập nhật hồ sơ cá nhân thành công')
-      qc.invalidateQueries({ queryKey: ['account', maTaiKhoan] })
+      alert("Cập nhật hồ sơ cá nhân thành công");
+      qc.invalidateQueries({ queryKey: ["account", maTaiKhoan] });
+      setSnapshot(userForm);
+      setIsEditing(false);
     },
     onError: (err) => alert(getApiErrorMessage(err)),
-  })
+  });
 
-  // --- Logic gửi yêu cầu Bác sĩ ---
-  const upgradeMutation = useMutation({
-    mutationFn: async () => {
-      if (!maTaiKhoan) throw new Error('Thiếu maTaiKhoan')
-      const form = new FormData()
-      form.append('thongTinBacSi', new Blob([JSON.stringify(doctorForm)], { type: 'application/json' }))
-      for (const u of uploads) {
-        form.append('tieuDeTaiLieu', u.tieuDe)
-        form.append('files', u.file)
-      }
-      return (await api.post('/api/auth/upgrade-to-doctor', form, {
-        params: { maTaiKhoan },
-        headers: { 'Content-Type': 'multipart/form-data' },
-      })).data
-    },
-    onSuccess: () => {
-      alert('Gửi yêu cầu nâng cấp bác sĩ thành công. Vui lòng chờ duyệt.')
-      qc.invalidateQueries({ queryKey: ['account', maTaiKhoan] })
-    },
-    onError: (err) => alert(getApiErrorMessage(err)),
-  })
+  const fullName = useMemo(
+    () => `${userForm.hoLot} ${userForm.ten}`.trim() || "Thành viên",
+    [userForm.hoLot, userForm.ten],
+  );
+  const avatarUrl = avatarPreview || userForm.anhDaiDien?.trim();
+  const statusLabel =
+    session?.trangThaiHoatDong === "HOAT_DONG" ? "ONLINE" : "OFFLINE";
+  const doctorInfo = memberAccountQuery.data;
+  const hasDoctorProfile =
+    !!doctorInfo?.coTaiKhoanBacSi ||
+    !!doctorInfo?.maBacSi ||
+    (session?.vaiTro || "").toUpperCase() === "BAC_SI";
+  const pendingDoctorProfile = doctorInfo?.trangThaiHoSo === "CHO_DUYET";
 
-  const handleLogout = () => {
-    if (window.confirm("Bạn có chắc muốn đăng xuất?")) {
-      logout()
-      navigate('/login', { replace: true })
-    }
+  const switchToMember = () => {
+    setActivePortal("member");
+  };
+
+  const handleCancelEdit = () => {
+    if (snapshot) setUserForm(snapshot);
+    setAvatarPreview(null);
+    setIsEditing(false);
+  };
+
+  const handlePickAvatar = () => {
+    if (!isEditing) return;
+    fileInputRef.current?.click();
+  };
+
+  const handleAvatarChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : "";
+      setAvatarPreview(result);
+      setUserForm((prev) => ({ ...prev, anhDaiDien: result }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  if (isDoctorContext) {
+    const profile = doctorProfileQuery.data;
+    const profileStatus = profile
+      ? getProfileStatusMeta(profile.trangThaiHoSo)
+      : null;
+
+    return (
+      <div className="doctor-page">
+        <DoctorPageHeading
+          eyebrow="Doctor account"
+          title="Hồ sơ bác sĩ"
+          description="Thông tin hành nghề và hồ sơ chuyên môn của bạn đang được hiển thị từ backend."
+          actions={
+            <button
+              type="button"
+              className="doctor-button doctor-button--secondary"
+              onClick={switchToMember}
+            >
+              Chuyển sang tài khoản người dùng
+            </button>
+          }
+        />
+
+        {doctorProfileQuery.isLoading ? (
+          <DoctorNotice
+            tone="info"
+            title="Đang tải hồ sơ bác sĩ"
+            description="Hệ thống đang lấy thông tin hồ sơ hành nghề từ backend."
+          />
+        ) : null}
+
+        {doctorProfileQuery.isError ? (
+          <DoctorNotice
+            tone="danger"
+            title="Không thể tải hồ sơ bác sĩ"
+            description={getApiErrorMessage(doctorProfileQuery.error)}
+          />
+        ) : null}
+
+        {profile ? (
+          <>
+            <section className="doctor-hero">
+              <div className="doctor-hero__content">
+                <div className="doctor-hero__eyebrow">Thông tin hành nghề</div>
+                <h2 className="doctor-hero__title">{profile.hoTenDayDu}</h2>
+                <p className="doctor-hero__subtitle">
+                  {profile.chuyenKhoa} · {profile.trinhDoChuyenMon}
+                </p>
+                <div className="doctor-button-row">
+                  <button
+                    type="button"
+                    className="doctor-button doctor-button--secondary"
+                    onClick={switchToMember}
+                  >
+                    Chuyển sang tài khoản người dùng
+                  </button>
+                </div>
+              </div>
+
+              <div className="doctor-hero__aside">
+                <div className="doctor-profile-strip">
+                  <DoctorAvatar
+                    name={profile.hoTenDayDu}
+                    imageUrl={profile.anhDaiDien}
+                  />
+                  <div>
+                    <h3 className="doctor-profile-strip__name">
+                      {profile.hoTenDayDu}
+                    </h3>
+                    <p className="doctor-profile-strip__meta">
+                      {profile.chuyenKhoa}
+                      <br />
+                      {profile.tenCoSoYTe}
+                    </p>
+                  </div>
+                </div>
+                {profileStatus ? (
+                  <DoctorStatusBadge
+                    label={profileStatus.label}
+                    tone={profileStatus.tone}
+                  />
+                ) : null}
+                <div className="doctor-keyfacts">
+                  <div className="doctor-keyfact">
+                    <span className="doctor-keyfact__label">Mã bác sĩ</span>
+                    <span className="doctor-keyfact__value">
+                      #{profile.maBacSi}
+                    </span>
+                  </div>
+                  <div className="doctor-keyfact">
+                    <span className="doctor-keyfact__label">
+                      Địa chỉ làm việc
+                    </span>
+                    <span className="doctor-keyfact__value">
+                      {profile.diaChiLamViec || "Chưa cập nhật"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section className="doctor-stat-grid">
+              <DoctorStatCard
+                label="Trạng thái hồ sơ"
+                value={profileStatus?.label ?? profile.trangThaiHoSo}
+                hint={profileStatus?.description}
+              />
+              <DoctorStatCard
+                label="Chuyên khoa"
+                value={profile.chuyenKhoa}
+                hint="Hiển thị với bệnh nhân."
+              />
+              <DoctorStatCard
+                label="Cơ sở y tế"
+                value={profile.tenCoSoYTe}
+                hint={
+                  profile.diaChiLamViec ||
+                  "Địa chỉ làm việc sẽ hiển thị khi được cập nhật."
+                }
+              />
+              <DoctorStatCard
+                label="Loại hình"
+                value={profile.loaiHinhBacSi}
+                hint="Loại hình bác sĩ."
+              />
+            </section>
+
+            <DoctorPanel
+              title="Thông tin chuyên môn"
+              description="Các thông tin dùng để nhận diện hồ sơ bác sĩ trên hệ thống."
+            >
+              <div className="doctor-meta-list">
+                <div className="doctor-meta-item">
+                  <span className="doctor-meta-item__label">Họ và tên</span>
+                  <div className="doctor-meta-item__value">
+                    {profile.hoTenDayDu}
+                  </div>
+                </div>
+                <div className="doctor-meta-item">
+                  <span className="doctor-meta-item__label">
+                    Mã chứng chỉ hành nghề
+                  </span>
+                  <div className="doctor-meta-item__value">
+                    {profile.maChungChiHanhNghe}
+                  </div>
+                </div>
+                <div className="doctor-meta-item">
+                  <span className="doctor-meta-item__label">
+                    Mô tả bản thân
+                  </span>
+                  <div className="doctor-meta-item__value">
+                    {profile.moTaBanThan || "Chưa có mô tả."}
+                  </div>
+                </div>
+                <div className="doctor-meta-item">
+                  <span className="doctor-meta-item__label">
+                    Tài khoản đăng nhập
+                  </span>
+                  <div className="doctor-meta-item__value">
+                    {profile.tenDangNhap}
+                  </div>
+                </div>
+              </div>
+            </DoctorPanel>
+          </>
+        ) : null}
+      </div>
+    );
   }
 
   return (
-    <div style={{ paddingBottom: '40px' }}>
-      <PageHeader title="Tài khoản" right={<Link to="/app/home">Home</Link>} />
+    <div className="member-cv">
+      <PageHeader title="Hồ sơ cá nhân" />
 
-      {/* BLOCK 1: THÔNG TIN TÀI KHOẢN */}
-      <div className="card stack">
-        <div className="row-between">
-          <div className="stack" style={{ gap: 4 }}>
-            <div style={{ fontWeight: 900, fontSize: '1.2rem' }}>TK #{session?.maTaiKhoan}</div>
-            <div className="muted">• role: {session?.vaiTro}</div>
-          </div>
-          <button className="btn btn-danger" type="button" onClick={handleLogout}>
-            Đăng xuất
+      <div className="member-profile-grid">
+        <section className="member-profile-card member-profile-card--left">
+          <button
+            type="button"
+            className={
+              isEditing
+                ? "member-cv__portrait member-cv__portrait--editable"
+                : "member-cv__portrait"
+            }
+            onClick={handlePickAvatar}
+          >
+            {avatarUrl ? (
+              <img
+                src={avatarUrl}
+                alt={fullName}
+                className="member-cv__avatar member-cv__avatar--large"
+              />
+            ) : (
+              <div className="member-cv__avatar member-cv__avatar--placeholder member-cv__avatar--large">
+                {createInitials(fullName)}
+              </div>
+            )}
+            <span className="member-cv__avatar-hint">
+              Thay đổi ảnh đại diện
+            </span>
           </button>
-        </div>
-      </div>
-
-      <div style={{ height: 20 }} />
-
-      {/* BLOCK 2: HỒ SƠ NGƯỜI DÙNG */}
-      <div className="card stack">
-        <div className="title">Hồ sơ người dùng</div>
-        <div className="grid">
-          {USER_FIELDS.map((f) => (
-            <div className="stack" key={f.k}>
-              <div className="label">{f.label}</div>
-              <input
-                className="input"
-                value={userForm[f.k]}
-                onChange={(e) => setUserForm({ ...userForm, [f.k]: e.target.value })}
-              />
-            </div>
-          ))}
-        </div>
-        <button
-          className="btn btn-primary"
-          style={{ marginTop: '10px' }}
-          disabled={updateUserMutation.isPending}
-          onClick={() => updateUserMutation.mutate()}
-        >
-          {updateUserMutation.isPending ? 'Đang lưu...' : 'Lưu hồ sơ'}
-        </button>
-      </div>
-
-      <div style={{ height: 20 }} />
-
-      {/* BLOCK 3: HỒ SƠ BÁC SĨ */}
-      <div className="card stack">
-        <div className="row-between">
-          <div className="title">Hồ sơ bác sĩ</div>
-          <span className="chip" style={{ fontSize: '0.8rem' }}>
-            Trạng thái: {accountQuery.data?.trangThaiHoSo ?? '—'}
-          </span>
-        </div>
-
-        <div className="muted" style={{ marginBottom: '10px' }}>
-          {accountQuery.data?.coTaiKhoanBacSi ? 'Đã liên kết hồ sơ bác sĩ.' : 'Chưa có hồ sơ bác sĩ.'}
-        </div>
-
-        <div className="grid">
-          {DOCTOR_FIELDS.map((f) => (
-            <div className="stack" key={f.k}>
-              <div className="label">{f.label}</div>
-              <input
-                className="input"
-                value={doctorForm[f.k]}
-                onChange={(e) => setDoctorForm({ ...doctorForm, [f.k]: e.target.value })}
-              />
-            </div>
-          ))}
-        </div>
-
-        <div className="stack" style={{ marginTop: '10px' }}>
-          <div className="label">Mô tả bản thân (tùy chọn)</div>
-          <textarea
-            className="input"
-            style={{ minHeight: '80px', resize: 'vertical' }}
-            value={doctorForm.moTaBanThan}
-            onChange={(e) => setDoctorForm({ ...doctorForm, moTaBanThan: e.target.value })}
-            placeholder="Giới thiệu kinh nghiệm hành nghề của bạn..."
-          />
-        </div>
-
-        <div className="stack" style={{ marginTop: '10px' }}>
-          <div className="label">Minh chứng kèm theo (tùy chọn)</div>
           <input
-            className="input"
-            style={{ padding: '8px' }}
+            ref={fileInputRef}
             type="file"
-            multiple
-            onChange={(e) => {
-              const files = Array.from(e.target.files || [])
-              setUploads(files.map((file) => ({ file, tieuDe: file.name })))
-            }}
+            accept="image/*"
+            hidden
+            onChange={handleAvatarChange}
           />
-          {uploads.length > 0 && (
-            <div className="muted" style={{ fontSize: '0.85rem' }}>Đã chọn {uploads.length} tệp.</div>
-          )}
-        </div>
+          <div className="member-profile-name">{fullName}</div>
+          <div className="member-profile-status">
+            <span className="member-cv__label">Trạng thái hoạt động</span>
+            <span className="member-cv__value">{statusLabel}</span>
+          </div>
+        </section>
 
-        <button
-          className="btn btn-primary"
-          style={{ marginTop: '15px' }}
-          disabled={upgradeMutation.isPending}
-          onClick={() => upgradeMutation.mutate()}
-        >
-          {upgradeMutation.isPending ? 'Đang gửi...' : 'Gửi yêu cầu mở hồ sơ bác sĩ'}
-        </button>
+        <div className="member-profile-right">
+          <section className="member-profile-card member-profile-card--action">
+            <div className="member-profile-action-list">
+              {pendingDoctorProfile ? (
+                <Link
+                  to="/app/doctor-status"
+                  className="member-profile-upgrade member-profile-upgrade--status"
+                >
+                  Xem trạng thái hồ sơ
+                </Link>
+              ) : hasDoctorProfile ? (
+                <button
+                  type="button"
+                  onClick={() => setActivePortal("doctor")}
+                  className="member-profile-upgrade"
+                >
+                  Chuyển sang tài khoản bác sĩ
+                </button>
+              ) : (
+                <Link
+                  to="/app/doctor-status"
+                  className="member-profile-upgrade member-profile-upgrade--outline"
+                >
+                  Mở tài khoản bác sĩ
+                </Link>
+              )}
+            </div>
+          </section>
+
+          <section className="member-profile-card member-profile-card--details">
+            <div className="member-cv__panel-header">
+              <div className="member-cv__panel-title">Hồ sơ cá nhân</div>
+              <div className="member-cv__actions">
+                {isEditing ? (
+                  <>
+                    <button
+                      type="button"
+                      className="member-cv__icon-button"
+                      onClick={handleCancelEdit}
+                      aria-label="Hủy chỉnh sửa"
+                    >
+                      ✕
+                    </button>
+                    <button
+                      type="button"
+                      className="member-cv__icon-button member-cv__icon-button--primary"
+                      onClick={() => updateUserMutation.mutate()}
+                      disabled={updateUserMutation.isPending}
+                      aria-label="Lưu hồ sơ"
+                    >
+                      ✓
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    className="member-cv__icon-button"
+                    onClick={() => setIsEditing(true)}
+                    aria-label="Chỉnh sửa hồ sơ"
+                  >
+                    ✎
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {isEditing ? (
+              <div className="member-cv__form">
+                {USER_FIELDS.map((f) => (
+                  <label className="member-cv__field" key={f.k}>
+                    <span className="member-cv__label">{f.label}</span>
+                    <input
+                      className="member-cv__input"
+                      value={userForm[f.k]}
+                      onChange={(e) =>
+                        setUserForm({ ...userForm, [f.k]: e.target.value })
+                      }
+                    />
+                  </label>
+                ))}
+              </div>
+            ) : (
+              <div className="member-profile-info">
+                {USER_FIELDS.map((f) => (
+                  <div className="member-cv__info" key={f.k}>
+                    <span className="member-cv__label">{f.label}</span>
+                    <span className="member-cv__value">
+                      {userForm[f.k] || "Chưa cập nhật"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
       </div>
     </div>
-  )
+  );
 }
