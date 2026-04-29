@@ -1,24 +1,15 @@
 import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-// import { api } from '../../api/http'
-// import type { ConversationSummary } from '../../api/types'
 import { useAuth } from '../../auth/AuthContext'
 import { PageHeader } from '../../components/PageHeader'
-// import { getApiErrorMessage } from '../../utils/errors'
 
 function formatConversationTime(value: string | null): string {
-  if (!value) return 'Chưa cập nhật'
-
+  if (!value) return ''
   const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return 'Vừa xong'
-
   const now = new Date()
-  const sameDay =
-    date.getFullYear() === now.getFullYear() &&
-    date.getMonth() === now.getMonth() &&
-    date.getDate() === now.getDate()
-
+  const sameDay = date.getDate() === now.getDate() && date.getMonth() === now.getMonth()
+  
   return sameDay
     ? new Intl.DateTimeFormat('vi-VN', { hour: '2-digit', minute: '2-digit' }).format(date)
     : new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit' }).format(date)
@@ -27,167 +18,164 @@ function formatConversationTime(value: string | null): string {
 export function MessagesPage() {
   const navigate = useNavigate()
   const { session } = useAuth()
-
-  const role = (session?.vaiTro || '').toUpperCase()
-  const isDoctor = role === 'BAC_SI'
+  const isDoctor = session?.vaiTro?.toUpperCase() === 'BAC_SI'
   const base = isDoctor ? '/doctor' : '/app'
 
-  const maNguoiDung = session?.maNguoiDung ?? null
-  const maBacSi = session?.maBacSi ?? null
-
-  // const params = isDoctor ? { maBacSi } : { maNguoiDung }
-  // const enabled = isDoctor ? !!maBacSi : !!maNguoiDung
-
   const query = useQuery({
-    queryKey: ['conversations', isDoctor ? 'doctor' : 'user', isDoctor ? maBacSi : maNguoiDung],
+    queryKey: ['conversations', isDoctor ? 'doctor' : 'user'],
     queryFn: async () => {
-      // --- COMMAND API THẬT ---
-      /*
-      return (await api.get<ConversationSummary[]>('/api/conversations', { params })).data
-      */
-
-      // --- MOCK DATA GIẢ LẬP ĐỂ XEM TRƯỚC UI ---
-      await new Promise(r => setTimeout(r, 600)); // Giả lập độ trễ mạng
+      await new Promise(r => setTimeout(r, 500))
+      // DANH SÁCH DÀI HƠN & ĐÃ FIX LỖI THIẾU hoTenBenhNhan
       return [
         {
           maCuocHoiThoai: 101,
-          hoTenBacSi: "BS. Nguyễn Văn Nhân",
-          chuyenKhoa: "Nội khoa",
-          tenCoSoYTe: "Bệnh viện Chợ Rẫy",
-          hoTenBenhNhan: "Bệnh nhân A",
-          anhDaiDienBacSi: null,
-          anhDaiDienBenhNhan: null,
-          noiDungCuoi: "Chào bạn, kết quả xét nghiệm của bạn đã ổn định hơn rồi nhé.",
-          thoiGianGuiCuoi: new Date().toISOString(), // Hiện "Vừa xong" hoặc giờ hiện tại
+          hoTenBacSi: "BS. Nguyễn Anh",
+          hoTenBenhNhan: "Trần Minh Nhân",
+          chuyenKhoa: "Thần kinh",
+          noiDungCuoi: "Bạn có thể đặt lịch vào ngày mai để tôi kiểm tra kỹ hơn nhé.",
+          thoiGianGuiCuoi: new Date().toISOString(),
+          unreadCount: 2,
+          isOnline: true
         },
         {
           maCuocHoiThoai: 102,
-          hoTenBacSi: "BS. Lê Thị Tuyết",
+          hoTenBacSi: "BS. Lê Tuyết",
+          hoTenBenhNhan: "Nguyễn Văn A",
           chuyenKhoa: "Nhi khoa",
-          tenCoSoYTe: "Bệnh viện Nhi Đồng 1",
-          hoTenBenhNhan: "Bệnh nhân B",
-          anhDaiDienBacSi: null,
-          anhDaiDienBenhNhan: null,
-          noiDungCuoi: "Hẹn gặp lại bé vào sáng thứ Hai tuần tới để tái khám.",
-          thoiGianGuiCuoi: new Date(Date.now() - 86400000).toISOString(), // Hiện ngày hôm qua
+          noiDungCuoi: "Bé đã đỡ sốt chưa chị ơi?",
+          thoiGianGuiCuoi: new Date(Date.now() - 3600000).toISOString(),
+          unreadCount: 0,
+          isOnline: false
+        },
+        {
+          maCuocHoiThoai: 103,
+          hoTenBacSi: "BS. Phạm Hòa",
+          hoTenBenhNhan: "Lê Thị B",
+          chuyenKhoa: "Tim mạch",
+          noiDungCuoi: "Nhớ uống thuốc đúng giờ và hạn chế ăn mặn.",
+          thoiGianGuiCuoi: new Date(Date.now() - 86400000).toISOString(),
+          unreadCount: 1,
+          isOnline: true
+        },
+        {
+          maCuocHoiThoai: 104,
+          hoTenBacSi: "BS. Đỗ Hùng",
+          hoTenBenhNhan: "Hoàng Nam",
+          chuyenKhoa: "Xương khớp",
+          noiDungCuoi: "Kết quả chụp X-quang của anh không có gì đáng lo.",
+          thoiGianGuiCuoi: new Date(Date.now() - 172800000).toISOString(),
+          unreadCount: 0,
+          isOnline: false
+        },
+        {
+          maCuocHoiThoai: 105,
+          hoTenBacSi: "BS. Mai Phương",
+          hoTenBenhNhan: "Quỳnh Chi",
+          chuyenKhoa: "Da liễu",
+          noiDungCuoi: "Chụp giúp tôi vùng da bị dị ứng hiện tại.",
+          thoiGianGuiCuoi: new Date(Date.now() - 259200000).toISOString(),
+          unreadCount: 5,
+          isOnline: true
         }
-      ];
-    },
-    enabled: true, // Luôn bật để Nhân xem được UI
+      ]
+    }
   })
 
-  const sorted = useMemo(() => {
-    const list = query.data || []
-    return [...list].sort((a, b) => {
-      const ta = a.thoiGianGuiCuoi ? new Date(a.thoiGianGuiCuoi).getTime() : 0
-      const tb = b.thoiGianGuiCuoi ? new Date(b.thoiGianGuiCuoi).getTime() : 0
-      return tb - ta
-    })
-  }, [query.data])
-
-  const latestConversation = sorted[0]
+  const sorted = useMemo(() => (query.data || []), [query.data])
 
   return (
-    <section className={`message-page ${isDoctor ? 'message-page--doctor' : 'message-page--member'}`}>
-      <PageHeader title="Nhắn tin" />
-      <p className="message-page__intro">
-        {isDoctor
-          ? 'Theo dõi các cuộc trao đổi với bệnh nhân và mở nhanh từng hội thoại.'
-          : 'Xem lại các cuộc trò chuyện với bác sĩ và tiếp tục nhận tư vấn.'}
-      </p>
+    <div style={{ backgroundColor: '#F4F7F8', minHeight: '100vh', paddingBottom: '40px' }}>
+      <PageHeader title="Tin nhắn" />
 
-      <div className="message-page__summary">
-        <article className="message-summary-card">
-          <span className="message-summary-card__label">Hội thoại</span>
-          <strong className="message-summary-card__value">{sorted.length}</strong>
-          <span className="message-summary-card__hint">
-            {sorted.length === 1 ? '1 cuộc trò chuyện đang hoạt động' : `${sorted.length} cuộc trò chuyện đang hiển thị`}
-          </span>
-        </article>
+      <div style={{ maxWidth: '500px', margin: '0 auto', padding: '10px 15px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {sorted.map((c) => {
+            // FIX: TypeScript sẽ không còn báo lỗi ở đây nữa
+            const title = isDoctor ? c.hoTenBenhNhan : c.hoTenBacSi
+            const lastMsg = c.noiDungCuoi || 'Bắt đầu cuộc trò chuyện'
 
-        <article className="message-summary-card">
-          <span className="message-summary-card__label">Vai trò</span>
-          <strong className="message-summary-card__value">{isDoctor ? 'Bác sĩ' : 'Thành viên'}</strong>
-          <span className="message-summary-card__hint">
-            {isDoctor ? 'Tập trung vào trao đổi với bệnh nhân.' : 'Tập trung vào trao đổi với bác sĩ.'}
-          </span>
-        </article>
-
-        <article className="message-summary-card">
-          <span className="message-summary-card__label">Cập nhật gần nhất</span>
-          <strong className="message-summary-card__value">{formatConversationTime(latestConversation?.thoiGianGuiCuoi ?? null)}</strong>
-          <span className="message-summary-card__hint">
-            {latestConversation?.noiDungCuoi || 'Chưa có tin nhắn nào được gửi.'}
-          </span>
-        </article>
-      </div>
-
-      {/* Tạm ẩn thông báo thiếu ID để check UI cho đẹp */}
-      {/* {!enabled ? (
-        <div className="message-notice message-notice--danger">Thiếu ID (maNguoiDung/maBacSi). Hãy đăng nhập lại.</div>
-      ) : null} */}
-
-      {query.isLoading ? <div className="message-notice">Đang tải danh sách hội thoại...</div> : null}
-      
-      {/* 
-      {query.isError ? (
-        <div className="message-notice message-notice--danger">{getApiErrorMessage(query.error)}</div>
-      ) : null} 
-      */}
-
-      {sorted.length === 0 && !query.isLoading ? (
-        <div className="message-empty-state">
-          <div className="message-empty-state__icon">...</div>
-          <div className="message-empty-state__title">Chưa có hội thoại</div>
-          <p className="message-empty-state__description">
-            Các cuộc trò chuyện sẽ xuất hiện tại đây sau khi bắt đầu nhắn tin.
-          </p>
-        </div>
-      ) : null}
-
-      <div className="message-list">
-        {sorted.map((c) => {
-          const title = isDoctor ? c.hoTenBenhNhan : c.hoTenBacSi
-          const subtitle = isDoctor ? 'Bệnh nhân' : `${c.chuyenKhoa} • ${c.tenCoSoYTe}`
-          const avatarUrl = isDoctor ? c.anhDaiDienBenhNhan : c.anhDaiDienBacSi
-          const lastMessage = c.noiDungCuoi || 'Chưa có tin nhắn'
-
-          return (
-            <article key={c.maCuocHoiThoai} className="message-thread-card">
-              <div className="message-thread-card__main">
-                {avatarUrl ? (
-                  <img src={avatarUrl} alt={title} className="message-thread-card__avatar message-thread-card__avatar--image" />
-                ) : (
-                  <div className="message-thread-card__avatar">{(title || '?').charAt(0).toUpperCase()}</div>
-                )}
-
-                <div className="message-thread-card__content">
-                  <div className="message-thread-card__topline">
-                    <div>
-                      <div className="message-thread-card__title">{title}</div>
-                      <div className="message-thread-card__subtitle">{subtitle}</div>
-                    </div>
-                    <div className="message-thread-card__time">{formatConversationTime(c.thoiGianGuiCuoi)}</div>
+            return (
+              <div 
+                key={c.maCuocHoiThoai}
+                onClick={() => navigate(`${base}/messages/${c.maCuocHoiThoai}`)}
+                className="message-item-card" // Chúng ta dùng style inline nhưng có thể giả lập hover
+                onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = 'translateY(-2px)';
+                    e.currentTarget.style.boxShadow = '0 6px 15px rgba(0,0,0,0.08)';
+                }}
+                onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.02)';
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '16px',
+                  backgroundColor: '#fff',
+                  borderRadius: '20px',
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                {/* Avatar */}
+                <div style={{ position: 'relative', flexShrink: 0 }}>
+                  <div style={{ 
+                    width: '52px', height: '52px', borderRadius: '50%', 
+                    backgroundColor: '#e5e7eb', overflow: 'hidden'
+                  }}>
+                    <img 
+                      src={`https://i.pravatar.cc/150?u=${c.maCuocHoiThoai}`} // Dùng ảnh ngẫu nhiên cho thật
+                      alt="avatar" 
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                    />
                   </div>
+                  {c.isOnline && (
+                    <div style={{
+                      position: 'absolute', bottom: '1px', right: '1px',
+                      width: '13px', height: '13px', backgroundColor: '#22C55E',
+                      borderRadius: '50%', border: '2px solid #fff'
+                    }} />
+                  )}
+                </div>
 
-                  <div className="message-thread-card__preview">
-                    <span className="message-thread-card__preview-label">Tin nhắn cuối</span>
-                    <p className="message-thread-card__preview-text">{lastMessage}</p>
+                {/* Info */}
+                <div style={{ flex: 1, marginLeft: '16px', minWidth: 0 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <div style={{ fontWeight: '800', fontSize: '15px', color: '#1A1A1A' }}>
+                      {title}
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#9CA3AF' }}>
+                      {formatConversationTime(c.thoiGianGuiCuoi)}
+                    </div>
+                  </div>
+                  
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <p style={{ 
+                      margin: 0, fontSize: '13px', color: '#6B7280', 
+                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                      flex: 1
+                    }}>
+                      {lastMsg}
+                    </p>
+                    
+                    {c.unreadCount > 0 && (
+                      <div style={{
+                        backgroundColor: '#24D5DB', color: '#fff', fontSize: '11px',
+                        fontWeight: 'bold', minWidth: '20px', height: '20px',
+                        borderRadius: '10px', display: 'grid', placeItems: 'center',
+                        marginLeft: '10px', padding: '0 6px'
+                      }}>
+                        {c.unreadCount}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
-
-              <button
-                className="message-thread-card__open"
-                type="button"
-                onClick={() => navigate(`${base}/messages/${c.maCuocHoiThoai}`)}
-              >
-                Mở
-              </button>
-            </article>
-          )
-        })}
+            )
+          })}
+        </div>
       </div>
-    </section>
+    </div>
   )
 }

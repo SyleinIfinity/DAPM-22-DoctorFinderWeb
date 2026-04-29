@@ -1,179 +1,180 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-// import { api } from '../../api/http'
-// import type { Message } from '../../api/types'
+import { useEffect, useMemo, useState, useRef } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { useAuth } from '../../auth/AuthContext'
-import { PageHeader } from '../../components/PageHeader'
-// import { getApiErrorMessage } from '../../utils/errors'
 
 function normalizeTime(value: string): string {
   if (!value) return ''
-
   const date = new Date(value)
-  if (!Number.isNaN(date.getTime())) {
-    return new Intl.DateTimeFormat('vi-VN', { hour: '2-digit', minute: '2-digit' }).format(date)
-  }
-
-  const parts = value.split('T')
-  if (parts.length !== 2) return value
-  return parts[1].slice(0, 5)
+  return new Intl.DateTimeFormat('vi-VN', { hour: '2-digit', minute: '2-digit' }).format(date)
 }
 
 export function ChatPage() {
   const params = useParams()
-  const qc = useQueryClient()
+  const navigate = useNavigate()
   const { session } = useAuth()
-
-  const role = (session?.vaiTro || '').toUpperCase()
-  const isDoctor = role === 'BAC_SI'
-  const base = isDoctor ? '/doctor' : '/app'
+  const scrollRef = useRef<HTMLDivElement>(null)
 
   const maCuocHoiThoai = Number(params.maCuocHoiThoai)
+  const maBacSiGiaLap = 1 // Giả định ID bác sĩ trong cuộc hội thoại này là 1
   const [noiDung, setNoiDung] = useState('')
-  const [error, setError] = useState<string | null>(null)
 
-  const query = useQuery({
+  const { data } = useQuery({
     queryKey: ['messages', maCuocHoiThoai],
     queryFn: async () => {
-      // --- COMMAND API THẬT ---
-      /*
-      return (await api.get<Message[]>(`/api/conversations/${maCuocHoiThoai}/messages`, { params: { limit: 80 } })).data
-      */
-
-      // --- MOCK DATA GIẢ LẬP ---
-      await new Promise(r => setTimeout(r, 500));
+      await new Promise(r => setTimeout(r, 500))
       return [
         {
           maTinNhan: 1,
-          maTaiKhoanGui: 999, // Giả lập ID Bác sĩ
-          noiDungTinNhan: "Chào bạn, tôi là bác sĩ Nhân. Bạn đang gặp vấn đề gì về sức khỏe?",
+          maTaiKhoanGui: 999,
+          noiDungTinNhan: "Chào bạn, tôi có thể giúp gì cho tình trạng sức khỏe của bạn hôm nay?",
           thoiGianGui: new Date(Date.now() - 300000).toISOString(),
-          loaiNoiDung: 'TEXT'
         },
         {
           maTinNhan: 2,
-          maTaiKhoanGui: session?.maTaiKhoan || 1, // Giả lập ID của bạn
+          maTaiKhoanGui: session?.maTaiKhoan || 2,
           noiDungTinNhan: "Chào bác sĩ, dạo gần đây em hay bị đau đầu vào buổi sáng.",
           thoiGianGui: new Date(Date.now() - 200000).toISOString(),
-          loaiNoiDung: 'TEXT'
-        },
-        {
-          maTinNhan: 3,
-          maTaiKhoanGui: 999,
-          noiDungTinNhan: "Tình trạng này diễn ra bao lâu rồi? Bạn có bị mất ngủ không?",
-          thoiGianGui: new Date().toISOString(),
-          loaiNoiDung: 'TEXT'
         }
-      ];
+      ]
     },
-    enabled: Number.isFinite(maCuocHoiThoai) && maCuocHoiThoai > 0,
-    refetchInterval: 5000,
+    enabled: !!maCuocHoiThoai,
   })
 
-  const messages = useMemo(() => {
-    const list = query.data || []
-    return [...list].sort((a, b) => (a.thoiGianGui || '').localeCompare(b.thoiGianGui || ''))
-  }, [query.data])
+  const messages = useMemo(() => data || [], [data])
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+    }
+  }, [messages])
 
   const sendMutation = useMutation({
     mutationFn: async () => {
-      // --- COMMAND API THẬT ---
-      /*
-      if (!session?.maTaiKhoan) throw new Error('Thiếu maTaiKhoan')
-      const text = noiDung.trim()
-      if (!text) throw new Error('Vui lòng nhập nội dung')
-      const res = await api.post<Message>(`/api/conversations/${maCuocHoiThoai}/messages`, {
-        maTaiKhoanGui: session.maTaiKhoan,
-        noiDungTinNhan: text,
-        loaiNoiDung: 'TEXT',
-      })
-      return res.data
-      */
-
-      // --- GIẢ LẬP GỬI TIN NHẮN THÀNH CÔNG ---
-      await new Promise(r => setTimeout(r, 300));
-      console.log("Tin nhắn đã gửi:", noiDung);
-      return {}; 
+      await new Promise(r => setTimeout(r, 300))
+      return { noiDungTinNhan: noiDung }
     },
-    onSuccess: async () => {
-      setNoiDung('')
-      // Tạm thời comment vì đang dùng mock data tĩnh
-      // await qc.invalidateQueries({ queryKey: ['messages', maCuocHoiThoai] })
-    },
-    // onError: (err) => setError(getApiErrorMessage(err)),
+    onSuccess: () => setNoiDung(''),
   })
 
-  useEffect(() => {
-    setError(null)
-  }, [maCuocHoiThoai])
-
-  useEffect(() => {
-    if (error && noiDung.trim()) setError(null)
-  }, [noiDung, error])
-
-  if (!Number.isFinite(maCuocHoiThoai) || maCuocHoiThoai <= 0) {
-    return (
-      <section className={`message-page ${isDoctor ? 'message-page--doctor' : 'message-page--member'}`}>
-        <PageHeader title="Chat" />
-        <div className="message-notice message-notice--danger">URL không hợp lệ.</div>
-      </section>
-    )
-  }
-
   return (
-    <section className={`message-page ${isDoctor ? 'message-page--doctor' : 'message-page--member'}`}>
-      <PageHeader title="Chat" right={<Link className="message-page__link" to={`${base}/messages`}>Danh sách</Link>} />
+    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 64px)', backgroundColor: '#F4F7F8' }}>
       
-      <div className="chat-shell">
-        <div className="chat-shell__messages">
-          {messages.length === 0 && !query.isLoading ? (
-            <div className="message-empty-state message-empty-state--compact">
-              <div className="message-empty-state__icon">...</div>
-              <div className="message-empty-state__title">Chưa có tin nhắn</div>
-              <p className="message-empty-state__description">Hãy gửi lời nhắn đầu tiên để bắt đầu cuộc trò chuyện.</p>
-            </div>
-          ) : null}
-
-          {messages.map((m) => {
-            const mine = m.maTaiKhoanGui === session?.maTaiKhoan || m.maTaiKhoanGui === 1 // logic giả lập mine
-
-            return (
-              <div key={m.maTinNhan} className={`chat-row ${mine ? 'chat-row--mine' : ''}`}>
-                <article className={`chat-bubble ${mine ? 'chat-bubble--mine' : ''}`}>
-                  <div className="chat-bubble__meta">
-                    <span className="chat-bubble__author">{mine ? 'Bạn' : `Bác sĩ (${m.maTaiKhoanGui})`}</span>
-                    <span className="chat-bubble__time">{normalizeTime(m.thoiGianGui)}</span>
-                  </div>
-                  <div className="chat-bubble__content">{m.noiDungTinNhan}</div>
-                </article>
-              </div>
-            )
-          })}
+      {/* 1. HEADER - PGS.TS Nguyễn Anh */}
+      <header style={{ 
+        display: 'flex', alignItems: 'center', padding: '12px 20px', 
+        backgroundColor: '#fff', borderBottom: '1px solid #E5E7EB', gap: '12px' 
+      }}>
+        <button onClick={() => navigate(-1)} style={{ border: 'none', background: 'none', fontSize: '20px', cursor: 'pointer', color: '#6B7280' }}>←</button>
+        <div style={{ position: 'relative' }}>
+          <div style={{ width: '42px', height: '42px', borderRadius: '50%', backgroundColor: '#0d9488', color: '#fff', display: 'grid', placeItems: 'center', fontWeight: 'bold', overflow: 'hidden' }}>
+            <img src="https://via.placeholder.com/100" alt="Dr" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          </div>
+          <div style={{ position: 'absolute', bottom: 1, right: 1, width: '10px', height: '10px', backgroundColor: '#22c55e', borderRadius: '50%', border: '2px solid #fff' }}></div>
         </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: '700', fontSize: '16px', color: '#111827' }}>PGS.TS Nguyễn Anh</div>
+          <div style={{ fontSize: '12px', color: '#10B981', fontWeight: '500' }}>Đang online</div>
+        </div>
+        <div style={{ display: 'flex', gap: '18px', color: '#0d9488' }}>
+          <span style={{ cursor: 'pointer' }}>📞</span>
+          <span style={{ cursor: 'pointer' }}>⚙️</span>
+        </div>
+      </header>
 
-        {error ? <div className="message-notice message-notice--danger">{error}</div> : null}
+      {/* 2. MESSAGES BODY */}
+      <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: '20px 15px' }}>
+        {messages.map((m) => {
+          const isMine = m.maTaiKhoanGui === session?.maTaiKhoan || m.maTaiKhoanGui === 2
+          
+          return (
+            <div key={m.maTinNhan} style={{ 
+              display: 'flex', 
+              flexDirection: isMine ? 'row-reverse' : 'row', 
+              marginBottom: '24px', 
+              gap: '12px',
+              alignItems: 'flex-start' // Căn avatar lên đầu tin nhắn
+            }}>
+              {!isMine && (
+                <div style={{ 
+                  width: '36px', height: '36px', borderRadius: '50%', 
+                  backgroundColor: '#E5E7EB', overflow: 'hidden', flexShrink: 0,
+                  marginTop: '4px' // Căn chỉnh để avatar không bị dính trần
+                }}>
+                   <img src="https://via.placeholder.com/50" alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
+              )}
 
-        <div className="chat-composer">
+              <div style={{ maxWidth: '70%', display: 'flex', flexDirection: 'column', alignItems: isMine ? 'flex-end' : 'flex-start' }}>
+                <div style={{ 
+                  padding: '12px 16px', 
+                  borderRadius: isMine ? '18px 18px 0 18px' : '18px 18px 18px 0',
+                  backgroundColor: isMine ? '#24D5DB' : '#fff',
+                  color: isMine ? '#fff' : '#1F2937',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                  fontSize: '14px',
+                  lineHeight: '1.5',
+                  fontWeight: '500'
+                }}>
+                  {m.noiDungTinNhan}
+                </div>
+                <div style={{ fontSize: '11px', color: '#9CA3AF', marginTop: '6px' }}>
+                  {normalizeTime(m.thoiGianGui)}
+                </div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* 3. QUICK ACTIONS - CÓ GẮN LINK */}
+      <div style={{ display: 'flex', gap: '10px', padding: '0 15px 12px', overflowX: 'auto', scrollbarWidth: 'none' }}>
+        <button 
+          onClick={() => navigate(`/app/doctors/${maBacSiGiaLap}/book`)}
+          style={{ padding: '8px 16px', borderRadius: '20px', border: '1px solid #CCFBF1', backgroundColor: '#F0FDFA', color: '#0d9488', fontSize: '13px', fontWeight: '600', cursor: 'pointer', whiteSpace: 'nowrap' }}
+        >
+          📅 Đặt lịch
+        </button>
+        <button 
+          onClick={() => navigate(`/app/doctors/${maBacSiGiaLap}`)}
+          style={{ padding: '8px 16px', borderRadius: '20px', border: '1px solid #CCFBF1', backgroundColor: '#F0FDFA', color: '#0d9488', fontSize: '13px', fontWeight: '600', cursor: 'pointer', whiteSpace: 'nowrap' }}
+        >
+          👤 Xem hồ sơ bác sĩ
+        </button>
+        <button 
+          style={{ padding: '8px 16px', borderRadius: '20px', border: '1px solid #CCFBF1', backgroundColor: '#F0FDFA', color: '#0d9488', fontSize: '13px', fontWeight: '600', cursor: 'pointer', whiteSpace: 'nowrap' }}
+        >
+          💰 Giá khám
+        </button>
+      </div>
+
+      {/* 4. COMPOSER */}
+      <footer style={{ padding: '12px 15px 30px', backgroundColor: '#fff', borderTop: '1px solid #E5E7EB' }}>
+        <div style={{ display: 'flex', alignItems: 'center', backgroundColor: '#F3F4F6', borderRadius: '24px', padding: '4px 8px 4px 16px', gap: '10px' }}>
           <input
-            className="chat-composer__input"
+            style={{ flex: 1, border: 'none', background: 'none', padding: '10px 0', outline: 'none', fontSize: '14px', color: '#374151' }}
+            placeholder="Nhập tin nhắn..."
             value={noiDung}
             onChange={(e) => setNoiDung(e.target.value)}
-            placeholder="Nhập tin nhắn..."
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !sendMutation.isPending) sendMutation.mutate();
-            }}
+            onKeyDown={(e) => e.key === 'Enter' && !sendMutation.isPending && sendMutation.mutate()}
           />
-          <button
-            className="message-thread-card__open chat-composer__send"
-            type="button"
-            disabled={sendMutation.isPending}
+          <div style={{ display: 'flex', gap: '14px', color: '#9CA3AF', fontSize: '20px' }}>
+            <span style={{ cursor: 'pointer' }}>🖼️</span>
+            <span style={{ cursor: 'pointer' }}>📷</span>
+          </div>
+          <button 
             onClick={() => sendMutation.mutate()}
+            disabled={!noiDung.trim() || sendMutation.isPending}
+            style={{ 
+              width: '38px', height: '38px', borderRadius: '50%', border: 'none', 
+              backgroundColor: '#24D5DB', color: '#fff', display: 'grid', placeItems: 'center', cursor: 'pointer',
+              transition: 'opacity 0.2s'
+            }}
           >
-            {sendMutation.isPending ? '...' : 'Gửi'}
+            ➤
           </button>
         </div>
-      </div>
-    </section>
+      </footer>
+    </div>
   )
 }

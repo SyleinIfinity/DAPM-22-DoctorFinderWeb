@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../api/http'
 import type { OtpSendResponse, OtpVerifyResponse, RegisterResponse } from '../api/types'
@@ -59,10 +59,7 @@ export function RegisterPage() {
     moTaBanThan: '',
   })
 
-  const [otpSent, setOtpSent] = useState(false)
   const [otpCode, setOtpCode] = useState('')
-
-  const canGoOtp = useMemo(() => info.email.trim().length > 0, [info.email])
 
   const styles = {
     wrapper: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f0fdfa', padding: '40px 20px', fontFamily: 'Arial, sans-serif' },
@@ -117,7 +114,6 @@ export function RegisterPage() {
     try {
       const res = await api.post<OtpSendResponse>('/api/auth/otp/send', { email: info.email.trim(), purpose: OTP_PURPOSE, forceResend: true })
       if (!res.data.otpSent) throw new Error(res.data.message || 'Không gửi được OTP')
-      setOtpSent(true)
     } catch (err) { setError(getApiErrorMessage(err)) } finally { setLoading(false) }
   }
 
