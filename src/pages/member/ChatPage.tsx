@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api } from '../../api/http'
-import type { Message } from '../../api/types'
+// import { api } from '../../api/http'
+// import type { Message } from '../../api/types'
 import { useAuth } from '../../auth/AuthContext'
 import { PageHeader } from '../../components/PageHeader'
-import { getApiErrorMessage } from '../../utils/errors'
+// import { getApiErrorMessage } from '../../utils/errors'
 
 function normalizeTime(value: string): string {
   if (!value) return ''
@@ -35,8 +35,38 @@ export function ChatPage() {
 
   const query = useQuery({
     queryKey: ['messages', maCuocHoiThoai],
-    queryFn: async () =>
-      (await api.get<Message[]>(`/api/conversations/${maCuocHoiThoai}/messages`, { params: { limit: 80 } })).data,
+    queryFn: async () => {
+      // --- COMMAND API THẬT ---
+      /*
+      return (await api.get<Message[]>(`/api/conversations/${maCuocHoiThoai}/messages`, { params: { limit: 80 } })).data
+      */
+
+      // --- MOCK DATA GIẢ LẬP ---
+      await new Promise(r => setTimeout(r, 500));
+      return [
+        {
+          maTinNhan: 1,
+          maTaiKhoanGui: 999, // Giả lập ID Bác sĩ
+          noiDungTinNhan: "Chào bạn, tôi là bác sĩ Nhân. Bạn đang gặp vấn đề gì về sức khỏe?",
+          thoiGianGui: new Date(Date.now() - 300000).toISOString(),
+          loaiNoiDung: 'TEXT'
+        },
+        {
+          maTinNhan: 2,
+          maTaiKhoanGui: session?.maTaiKhoan || 1, // Giả lập ID của bạn
+          noiDungTinNhan: "Chào bác sĩ, dạo gần đây em hay bị đau đầu vào buổi sáng.",
+          thoiGianGui: new Date(Date.now() - 200000).toISOString(),
+          loaiNoiDung: 'TEXT'
+        },
+        {
+          maTinNhan: 3,
+          maTaiKhoanGui: 999,
+          noiDungTinNhan: "Tình trạng này diễn ra bao lâu rồi? Bạn có bị mất ngủ không?",
+          thoiGianGui: new Date().toISOString(),
+          loaiNoiDung: 'TEXT'
+        }
+      ];
+    },
     enabled: Number.isFinite(maCuocHoiThoai) && maCuocHoiThoai > 0,
     refetchInterval: 5000,
   })
@@ -48,6 +78,8 @@ export function ChatPage() {
 
   const sendMutation = useMutation({
     mutationFn: async () => {
+      // --- COMMAND API THẬT ---
+      /*
       if (!session?.maTaiKhoan) throw new Error('Thiếu maTaiKhoan')
       const text = noiDung.trim()
       if (!text) throw new Error('Vui lòng nhập nội dung')
@@ -57,12 +89,19 @@ export function ChatPage() {
         loaiNoiDung: 'TEXT',
       })
       return res.data
+      */
+
+      // --- GIẢ LẬP GỬI TIN NHẮN THÀNH CÔNG ---
+      await new Promise(r => setTimeout(r, 300));
+      console.log("Tin nhắn đã gửi:", noiDung);
+      return {}; 
     },
     onSuccess: async () => {
       setNoiDung('')
-      await qc.invalidateQueries({ queryKey: ['messages', maCuocHoiThoai] })
+      // Tạm thời comment vì đang dùng mock data tĩnh
+      // await qc.invalidateQueries({ queryKey: ['messages', maCuocHoiThoai] })
     },
-    onError: (err) => setError(getApiErrorMessage(err)),
+    // onError: (err) => setError(getApiErrorMessage(err)),
   })
 
   useEffect(() => {
@@ -85,17 +124,7 @@ export function ChatPage() {
   return (
     <section className={`message-page ${isDoctor ? 'message-page--doctor' : 'message-page--member'}`}>
       <PageHeader title="Chat" right={<Link className="message-page__link" to={`${base}/messages`}>Danh sách</Link>} />
-      <p className="message-page__intro">
-        {isDoctor
-          ? 'Trao đổi nhanh với bệnh nhân. Dữ liệu được làm mới tự động mỗi 5 giây.'
-          : 'Nhận thông tin tư vấn từ bác sĩ và tiếp tục hỏi đáp trong cùng hội thoại.'}
-      </p>
-
-      {query.isLoading ? <div className="message-notice">Đang tải hội thoại...</div> : null}
-      {query.isError ? (
-        <div className="message-notice message-notice--danger">{getApiErrorMessage(query.error)}</div>
-      ) : null}
-
+      
       <div className="chat-shell">
         <div className="chat-shell__messages">
           {messages.length === 0 && !query.isLoading ? (
@@ -107,13 +136,13 @@ export function ChatPage() {
           ) : null}
 
           {messages.map((m) => {
-            const mine = m.maTaiKhoanGui === session?.maTaiKhoan
+            const mine = m.maTaiKhoanGui === session?.maTaiKhoan || m.maTaiKhoanGui === 1 // logic giả lập mine
 
             return (
               <div key={m.maTinNhan} className={`chat-row ${mine ? 'chat-row--mine' : ''}`}>
                 <article className={`chat-bubble ${mine ? 'chat-bubble--mine' : ''}`}>
                   <div className="chat-bubble__meta">
-                    <span className="chat-bubble__author">{mine ? 'Bạn' : `Tài khoản ${m.maTaiKhoanGui}`}</span>
+                    <span className="chat-bubble__author">{mine ? 'Bạn' : `Bác sĩ (${m.maTaiKhoanGui})`}</span>
                     <span className="chat-bubble__time">{normalizeTime(m.thoiGianGui)}</span>
                   </div>
                   <div className="chat-bubble__content">{m.noiDungTinNhan}</div>
@@ -131,6 +160,9 @@ export function ChatPage() {
             value={noiDung}
             onChange={(e) => setNoiDung(e.target.value)}
             placeholder="Nhập tin nhắn..."
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !sendMutation.isPending) sendMutation.mutate();
+            }}
           />
           <button
             className="message-thread-card__open chat-composer__send"
@@ -138,7 +170,7 @@ export function ChatPage() {
             disabled={sendMutation.isPending}
             onClick={() => sendMutation.mutate()}
           >
-            {sendMutation.isPending ? 'Đang gửi' : 'Gửi'}
+            {sendMutation.isPending ? '...' : 'Gửi'}
           </button>
         </div>
       </div>

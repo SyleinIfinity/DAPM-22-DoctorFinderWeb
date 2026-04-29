@@ -1,11 +1,11 @@
 import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { api } from '../../api/http'
-import type { ConversationSummary } from '../../api/types'
+// import { api } from '../../api/http'
+// import type { ConversationSummary } from '../../api/types'
 import { useAuth } from '../../auth/AuthContext'
 import { PageHeader } from '../../components/PageHeader'
-import { getApiErrorMessage } from '../../utils/errors'
+// import { getApiErrorMessage } from '../../utils/errors'
 
 function formatConversationTime(value: string | null): string {
   if (!value) return 'Chưa cập nhật'
@@ -35,13 +35,45 @@ export function MessagesPage() {
   const maNguoiDung = session?.maNguoiDung ?? null
   const maBacSi = session?.maBacSi ?? null
 
-  const params = isDoctor ? { maBacSi } : { maNguoiDung }
-  const enabled = isDoctor ? !!maBacSi : !!maNguoiDung
+  // const params = isDoctor ? { maBacSi } : { maNguoiDung }
+  // const enabled = isDoctor ? !!maBacSi : !!maNguoiDung
 
   const query = useQuery({
     queryKey: ['conversations', isDoctor ? 'doctor' : 'user', isDoctor ? maBacSi : maNguoiDung],
-    queryFn: async () => (await api.get<ConversationSummary[]>('/api/conversations', { params })).data,
-    enabled,
+    queryFn: async () => {
+      // --- COMMAND API THẬT ---
+      /*
+      return (await api.get<ConversationSummary[]>('/api/conversations', { params })).data
+      */
+
+      // --- MOCK DATA GIẢ LẬP ĐỂ XEM TRƯỚC UI ---
+      await new Promise(r => setTimeout(r, 600)); // Giả lập độ trễ mạng
+      return [
+        {
+          maCuocHoiThoai: 101,
+          hoTenBacSi: "BS. Nguyễn Văn Nhân",
+          chuyenKhoa: "Nội khoa",
+          tenCoSoYTe: "Bệnh viện Chợ Rẫy",
+          hoTenBenhNhan: "Bệnh nhân A",
+          anhDaiDienBacSi: null,
+          anhDaiDienBenhNhan: null,
+          noiDungCuoi: "Chào bạn, kết quả xét nghiệm của bạn đã ổn định hơn rồi nhé.",
+          thoiGianGuiCuoi: new Date().toISOString(), // Hiện "Vừa xong" hoặc giờ hiện tại
+        },
+        {
+          maCuocHoiThoai: 102,
+          hoTenBacSi: "BS. Lê Thị Tuyết",
+          chuyenKhoa: "Nhi khoa",
+          tenCoSoYTe: "Bệnh viện Nhi Đồng 1",
+          hoTenBenhNhan: "Bệnh nhân B",
+          anhDaiDienBacSi: null,
+          anhDaiDienBenhNhan: null,
+          noiDungCuoi: "Hẹn gặp lại bé vào sáng thứ Hai tuần tới để tái khám.",
+          thoiGianGuiCuoi: new Date(Date.now() - 86400000).toISOString(), // Hiện ngày hôm qua
+        }
+      ];
+    },
+    enabled: true, // Luôn bật để Nhân xem được UI
   })
 
   const sorted = useMemo(() => {
@@ -90,13 +122,18 @@ export function MessagesPage() {
         </article>
       </div>
 
-      {!enabled ? (
+      {/* Tạm ẩn thông báo thiếu ID để check UI cho đẹp */}
+      {/* {!enabled ? (
         <div className="message-notice message-notice--danger">Thiếu ID (maNguoiDung/maBacSi). Hãy đăng nhập lại.</div>
-      ) : null}
+      ) : null} */}
+
       {query.isLoading ? <div className="message-notice">Đang tải danh sách hội thoại...</div> : null}
+      
+      {/* 
       {query.isError ? (
         <div className="message-notice message-notice--danger">{getApiErrorMessage(query.error)}</div>
-      ) : null}
+      ) : null} 
+      */}
 
       {sorted.length === 0 && !query.isLoading ? (
         <div className="message-empty-state">
