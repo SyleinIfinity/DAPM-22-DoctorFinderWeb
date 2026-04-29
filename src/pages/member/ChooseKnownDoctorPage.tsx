@@ -16,11 +16,32 @@ export function ChooseKnownDoctorPage() {
   const [tab, setTab] = useState<SourceTab>('HISTORY')
 
   const followsQuery = useQuery({
-    queryKey: ['follows', maNguoiDung],
-    queryFn: async () =>
-      (await api.get<FollowedDoctor[]>('/api/follows', { params: { maNguoiDung } })).data,
-    enabled: !!maNguoiDung,
-  })
+  queryKey: ['follows', maNguoiDung],
+  queryFn: async () => {
+    // API
+    // (await api.get<FollowedDoctor[]>('/api/follows', { params: { maNguoiDung } })).data,
+
+    // --- MOCK DATA GIẢ LẬP ---
+    await new Promise(r => setTimeout(r, 500));
+    return [
+      { 
+        maBacSi: 20, 
+        hoTenBacSi: "BS. Lê Thị Tuyết", 
+        chuyenKhoa: "Nhi khoa", 
+        tenCoSoYTe: "Bệnh viện Nhi Đồng 1", 
+        diaChiLamViec: "Quận 10, TP.HCM" 
+      },
+      { 
+        maBacSi: 21, 
+        hoTenBacSi: "BS. Trần Văn B", 
+        chuyenKhoa: "Da liễu", 
+        tenCoSoYTe: "Phòng khám tư", 
+        diaChiLamViec: "Quận 3, TP.HCM" 
+      }
+    ];
+  },
+  enabled: true,
+});
 
   const upcomingQuery = useQuery({
     queryKey: ['appointments', maNguoiDung, 'upcoming'],
@@ -29,12 +50,23 @@ export function ChooseKnownDoctorPage() {
     enabled: !!maNguoiDung,
   })
 
+  // const historyQuery = useQuery({
+  //   queryKey: ['appointments', maNguoiDung, 'history'],
+  //   queryFn: async () =>
+  //     (await api.get<AppointmentSummary[]>('/api/appointments', { params: { maNguoiDung, scope: 'history' } })).data,
+  //   enabled: !!maNguoiDung,
+  // })
   const historyQuery = useQuery({
-    queryKey: ['appointments', maNguoiDung, 'history'],
-    queryFn: async () =>
-      (await api.get<AppointmentSummary[]>('/api/appointments', { params: { maNguoiDung, scope: 'history' } })).data,
-    enabled: !!maNguoiDung,
-  })
+  queryKey: ['appointments', maNguoiDung, 'history'],
+  queryFn: async () => {
+    // api.get<AppointmentSummary[]>('/api/appointments', { params: { maNguoiDung, scope: 'history' } }) -- COMMAND LẠI
+    await new Promise(r => setTimeout(r, 500));
+    return [
+      { maBacSi: 1, hoTenBacSi: "BS. Nguyễn Văn Nhân", chuyenKhoa: "Nội khoa", tenCoSoYTe: "BV Chợ Rẫy", diaChiLamViec: "TP.HCM" }
+    ];
+  },
+  enabled: true,
+})
 
   const historyDoctors = useMemo(() => {
     const map = new Map<number, { maBacSi: number; hoTenBacSi: string; chuyenKhoa: string; tenCoSoYTe: string; diaChiLamViec: string | null }>()
@@ -67,7 +99,7 @@ export function ChooseKnownDoctorPage() {
           </button>
         </div>
 
-        {!maNguoiDung ? <div className="muted">Thiếu maNguoiDung. Hãy đăng nhập lại.</div> : null}
+        {/* {!maNguoiDung ? <div className="muted">Thiếu maNguoiDung. Hãy đăng nhập lại.</div> : null} */}
         {tab === 'HISTORY' && (upcomingQuery.isError || historyQuery.isError) ? (
           <div className="card" style={{ borderColor: 'rgba(239,68,68,0.6)' }}>
             {getApiErrorMessage(upcomingQuery.error || historyQuery.error)}
