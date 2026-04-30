@@ -631,7 +631,68 @@
 
 .doctor-action-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .doctor-request-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; }
-.doctor-schedule-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(300px, 0.9fr); gap: 18px; }
+.doctor-schedule-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr); gap: 18px; }
+
+.doctor-calendar-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.doctor-calendar-toolbar__title {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--c-ink);
+  text-transform: capitalize;
+}
+
+.doctor-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.doctor-calendar-weekday {
+  text-align: center;
+  padding: 8px 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--c-ink-3);
+}
+
+.doctor-calendar-day {
+  min-height: 88px;
+  padding: 10px 10px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--c-border);
+  background: #fff;
+  color: var(--c-ink);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: var(--shadow-xs);
+}
+
+.doctor-calendar-day:hover { transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+.doctor-calendar-day.is-selected { outline: 2px solid var(--c-teal); outline-offset: 1px; }
+.doctor-calendar-day.is-today { border-color: rgba(14, 158, 138, 0.55); }
+
+.doctor-calendar-day--empty { background: #ffffff; }
+.doctor-calendar-day--green { background: rgba(30, 122, 82, 0.12); border-color: rgba(30, 122, 82, 0.28); }
+.doctor-calendar-day--brown { background: rgba(176, 122, 24, 0.16); border-color: rgba(176, 122, 24, 0.32); }
+.doctor-calendar-day--gray { background: #eef2f3; color: var(--c-ink-3); border-color: rgba(106, 148, 144, 0.16); cursor: default; }
+
+.doctor-calendar-day__date { font-family: var(--font-display); font-size: 18px; font-weight: 800; }
+.doctor-calendar-day__meta { font-size: 11px; font-weight: 600; color: inherit; opacity: 0.82; }
+
+.doctor-calendar-day--gray .doctor-calendar-day__meta { opacity: 0.7; }
 
 /* ═══════════════════════════════════════════════════════════
    STAT CARD
