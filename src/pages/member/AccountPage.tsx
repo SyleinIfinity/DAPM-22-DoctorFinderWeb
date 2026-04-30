@@ -46,7 +46,7 @@ export function AccountPage() {
   const maNguoiDung = session?.maNguoiDung ?? null;
   const activePortal = session?.activePortal ?? "member";
   const role = (session?.vaiTro || "").toUpperCase();
-  const isDoctorContext = activePortal === "doctor" || role === "BAC_SI";
+  const isDoctorContext = activePortal === "doctor";
 
   const [userForm, setUserForm] = useState<UserForm>({
     hoLot: "",
