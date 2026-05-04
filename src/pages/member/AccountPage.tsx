@@ -45,7 +45,6 @@ export function AccountPage() {
   const maTaiKhoan = session?.maTaiKhoan ?? null;
   const maNguoiDung = session?.maNguoiDung ?? null;
   const activePortal = session?.activePortal ?? "member";
-  const role = (session?.vaiTro || "").toUpperCase();
   const isDoctorContext = activePortal === "doctor";
 
   const [userForm, setUserForm] = useState<UserForm>({
