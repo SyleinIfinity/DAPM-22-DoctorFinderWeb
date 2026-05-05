@@ -8,7 +8,6 @@ import { PageHeader } from "../../components/PageHeader";
 import { createInitials } from "../doctor/doctorUi";
 import {
   DoctorAvatar,
-  DoctorNotice,
   DoctorPageHeading,
   getProfileStatusMeta,
   DoctorStatusBadge,

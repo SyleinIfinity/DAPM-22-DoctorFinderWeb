@@ -28,6 +28,20 @@ type DoctorFormState = {
   moTaBanThan: string;
 };
 
+type DoctorApiEnvelope = { data?: AccountDoctorInfo | null } | null;
+
+function createDocUpload(): DocUpload {
+  return { id: Date.now(), title: "", file: null };
+}
+
+function isDoctorInfo(value: unknown): value is AccountDoctorInfo {
+  return !!value && typeof value === "object" && "trangThaiHoSo" in value;
+}
+
+function isDoctorApiEnvelope(value: unknown): value is DoctorApiEnvelope {
+  return !!value && typeof value === "object" && "data" in value;
+}
+
 function getInitialDoctorForm(data?: AccountDoctorInfo | null): DoctorFormState {
   return {
     chuyenKhoa: data?.chuyenKhoa ?? "",
@@ -42,10 +56,14 @@ function getInitialDoctorForm(data?: AccountDoctorInfo | null): DoctorFormState 
 
 function getActivityStatusMeta(status: string | null | undefined) {
   switch (status) {
-    case "HOAT_DONG": return { label: "Đang hoạt động", tone: "success" as const };
-    case "BI_KHOA": return { label: "Tài khoản bị khóa", tone: "danger" as const };
-    case "CHO_DUYET": return { label: "Chờ kích hoạt", tone: "warning" as const };
-    default: return { label: status ?? "Chưa xác định", tone: "neutral" as const };
+    case "HOAT_DONG":
+      return { label: "Đang hoạt động", tone: "success" as const };
+    case "BI_KHOA":
+      return { label: "Tài khoản bị khóa", tone: "danger" as const };
+    case "CHO_DUYET":
+      return { label: "Chờ kích hoạt", tone: "warning" as const };
+    default:
+      return { label: status ?? "Chưa xác định", tone: "neutral" as const };
   }
 }
 
@@ -56,7 +74,7 @@ export function DoctorStatusPage() {
   // --- TRẠNG THÁI ĐĂNG KÝ ---
   const [isRegistering, setIsRegistering] = useState(false);
   const [doctorForm, setDoctorForm] = useState<DoctorFormState>(getInitialDoctorForm(null));
-  const [docs, setDocs] = useState<DocUpload[]>([{ id: Date.now(), title: "", file: null }]);
+  const [docs, setDocs] = useState<DocUpload[]>(() => [createDocUpload()]);
 
   const query = useQuery({
     queryKey: ["doctor-status", maTaiKhoan],
@@ -68,11 +86,13 @@ export function DoctorStatusPage() {
     enabled: !!maTaiKhoan,
   });
 
-  const rawResponse = query.data as any ?? null;
-  const rawData = rawResponse && typeof rawResponse === 'object' && 'trangThaiHoSo' in rawResponse
-    ? (rawResponse as AccountDoctorInfo)
-    : rawResponse && typeof rawResponse === 'object' && 'data' in rawResponse && rawResponse.data
-    ? (rawResponse.data as AccountDoctorInfo)
+  const rawResponse: unknown = query.data ?? null;
+  const doctorEnvelope = isDoctorApiEnvelope(rawResponse) ? rawResponse : null;
+  const envelopeData = doctorEnvelope?.data ?? null;
+  const rawData = isDoctorInfo(rawResponse)
+    ? rawResponse
+    : isDoctorInfo(envelopeData)
+    ? envelopeData
     : null;
   const hasDoctorAccount = rawData?.coTaiKhoanBacSi ?? false;
   const hasPendingProfile = !hasDoctorAccount && (
@@ -85,8 +105,11 @@ export function DoctorStatusPage() {
   const shouldShowProfilePanel = hasDoctorRequest;
 
   // Xử lý vùng minh chứng
-  const addDocRow = () => setDocs([...docs, { id: Date.now(), title: "", file: null }]);
-  const removeDocRow = (id: number) => { if (docs.length > 1) setDocs(docs.filter(d => d.id !== id)); };
+  const addDocRow = () =>
+    setDocs((prev) => [...prev, createDocUpload()]);
+  const removeDocRow = (id: number) => {
+    if (docs.length > 1) setDocs(docs.filter((d) => d.id !== id));
+  };
 
   return (
     <div className="doctor-page">
@@ -95,7 +118,11 @@ export function DoctorStatusPage() {
         title="Trạng thái hồ sơ"
         description="Thông tin tài khoản và hồ sơ bác sĩ liên kết với phiên đăng nhập hiện tại."
         actions={
-          <Link className="doctor-button doctor-button--secondary doctor-button-link" to="/app/account" style={{ color: '#000' }}>
+          <Link
+            className="doctor-button doctor-button--secondary doctor-button-link"
+            to="/app/account"
+            style={{ color: "#000" }}
+          >
             Chỉnh sửa hồ sơ
           </Link>
         }
@@ -123,10 +150,29 @@ export function DoctorStatusPage() {
       {rawData ? (
         <>
           {isRegistering ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '25px', marginBottom: '30px' }}>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "25px",
+                marginBottom: "30px",
+              }}
+            >
               <DoctorPanel title="Thông tin chuyên môn (Theo thiết kế ERD)">
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "20px",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: "20px",
+                    }}
+                  >
                     <div className="doctor-meta-item">
                       <span className="doctor-meta-item__label">CHUYÊN KHOA</span>
                       <input
@@ -197,16 +243,64 @@ export function DoctorStatusPage() {
                 </div>
               </DoctorPanel>
 
-              <DoctorPanel 
-                title="Vùng tải lên minh chứng" 
-                aside={<button onClick={addDocRow} style={{ color: '#24D5DB', background: 'none', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}>+ Thêm tài liệu</button>}
+              <DoctorPanel
+                title="Vùng tải lên minh chứng"
+                aside={
+                  <button
+                    onClick={addDocRow}
+                    style={{
+                      color: "#24D5DB",
+                      background: "none",
+                      border: "none",
+                      fontWeight: "bold",
+                      cursor: "pointer",
+                    }}
+                  >
+                    + Thêm tài liệu
+                  </button>
+                }
               >
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "12px",
+                  }}
+                >
                   {docs.map((d) => (
-                    <div key={d.id} style={{ display: 'flex', gap: '10px', alignItems: 'center', backgroundColor: '#F9FAFB', padding: '10px', borderRadius: '12px' }}>
-                      <input type="text" placeholder="Tiêu đề minh chứng" style={{ flex: 1, padding: '8px', borderRadius: '8px', border: '1px solid #E5E7EB' }} />
+                    <div
+                      key={d.id}
+                      style={{
+                        display: "flex",
+                        gap: "10px",
+                        alignItems: "center",
+                        backgroundColor: "#F9FAFB",
+                        padding: "10px",
+                        borderRadius: "12px",
+                      }}
+                    >
+                      <input
+                        type="text"
+                        placeholder="Tiêu đề minh chứng"
+                        style={{
+                          flex: 1,
+                          padding: "8px",
+                          borderRadius: "8px",
+                          border: "1px solid #E5E7EB",
+                        }}
+                      />
                       <input type="file" style={{ flex: 1 }} />
-                      <button onClick={() => removeDocRow(d.id)} style={{ color: '#FF4D4F', border: 'none', background: 'none', fontWeight: 'bold' }}>Xóa</button>
+                      <button
+                        onClick={() => removeDocRow(d.id)}
+                        style={{
+                          color: "#FF4D4F",
+                          border: "none",
+                          background: "none",
+                          fontWeight: "bold",
+                        }}
+                      >
+                        Xóa
+                      </button>
                     </div>
                   ))}
                 </div>
