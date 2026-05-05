@@ -348,3 +348,41 @@ export type AdminAccountAction = {
   trangThaiHoatDong: string
   ngayTao: string
 }
+
+/** Admin dashboard & báo cáo tìm kiếm / lượt xem hồ sơ bác sĩ */
+export type AdminDashboardOverview = {
+  onlineAccounts: number
+  totalMembers: number
+  totalDoctors: number
+  onlineWindowMinutes: number
+}
+
+export type AdminDashboardEvent = {
+  type: string
+  message: string
+  occurredAt: string
+}
+
+export type AdminReportSlice = {
+  label: string
+  value: number
+  percent: number
+}
+
+export type AdminDoctorProfileTrafficReport = {
+  slices: AdminReportSlice[]
+  totalViews: number
+}
+
+export type AdminReportDoctorRank = {
+  rank: number
+  maBacSi: number
+  hoTenDayDu: string
+  count: number
+}
+
+export type AdminReportKeyword = {
+  rank: number
+  keyword: string
+  count: number
+}

@@ -1,24 +1,43 @@
-import { NavLink } from 'react-router-dom'
-import { useAuth } from '../auth/AuthContext'
-import { createInitials } from '../pages/doctor/doctorUi'
+import { NavLink, useNavigate } from "react-router-dom";
+import { useAuth } from "../auth/AuthContext";
+import { createInitials } from "../pages/doctor/doctorUi";
 
 export type SidebarNavItem = {
-  to: string
-  label: string
-}
+  to: string;
+  label: string;
+};
 
-export function DoctorSidebar({ items }: { items: SidebarNavItem[] }) {
-  const { session } = useAuth()
-  const name = session?.tenDangNhap ?? 'Doctor'
+export function DoctorSidebar({
+  items,
+  brand,
+  showLogout,
+}: {
+  items: SidebarNavItem[];
+  brand?: string;
+  showLogout?: boolean;
+}) {
+  const { session, logout } = useAuth();
+  const navigate = useNavigate();
+  const name = session?.tenDangNhap ?? brand ?? "Doctor";
+
+  const handleLogout = () => {
+    logout();
+    navigate("/");
+  };
 
   return (
     <aside className="doctor-sidebar">
       <div className="doctor-sidebar__header">
         <div className="doctor-sidebar__logo">
-          <div className="doctor-avatar" style={{ width: 48, height: 48, fontSize: 16 }}>
+          <div
+            className="doctor-avatar"
+            style={{ width: 48, height: 48, fontSize: 16 }}
+          >
             {createInitials(name)}
           </div>
-          <span className="doctor-sidebar__title">DoctorSpace</span>
+          <span className="doctor-sidebar__title">
+            {brand ?? "DoctorSpace"}
+          </span>
         </div>
       </div>
       <nav className="doctor-sidebar__nav">
@@ -27,7 +46,9 @@ export function DoctorSidebar({ items }: { items: SidebarNavItem[] }) {
             key={item.to}
             to={item.to}
             className={({ isActive }) =>
-              isActive ? 'doctor-sidebar-item doctor-sidebar-item--active' : 'doctor-sidebar-item'
+              isActive
+                ? "doctor-sidebar-item doctor-sidebar-item--active"
+                : "doctor-sidebar-item"
             }
           >
             {item.label}
@@ -35,8 +56,17 @@ export function DoctorSidebar({ items }: { items: SidebarNavItem[] }) {
         ))}
       </nav>
       <div className="doctor-sidebar__footer">
+        {showLogout ? (
+          <button
+            className="btn"
+            onClick={handleLogout}
+            style={{ width: "100%" }}
+          >
+            Đăng xuất
+          </button>
+        ) : null}
         <div className="doctor-sidebar-version">v2.1.0 Pro</div>
       </div>
     </aside>
-  )
+  );
 }

@@ -19,7 +19,7 @@ export function LoginPage() {
       return <Navigate to="/doctor/home" replace />;
     const role = (session.vaiTro || "").toUpperCase();
     if (role === "ADMIN" || role === "QUAN_TRI_VIEN")
-      return <Navigate to="/admin/pending-doctors" replace />;
+      return <Navigate to="/admin/home" replace />;
     return <Navigate to="/app/home" replace />;
   }
 
@@ -38,7 +38,7 @@ export function LoginPage() {
       const role = (nextSession.vaiTro || "").toUpperCase();
 
       if (role === "ADMIN" || role === "QUAN_TRI_VIEN") {
-        navigate("/admin/pending-doctors", { replace: true });
+        navigate("/admin/home", { replace: true });
         return;
       }
 

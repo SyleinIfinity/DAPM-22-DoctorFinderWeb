@@ -7,6 +7,9 @@ import { AdminAccountsPage } from "./pages/admin/AdminAccountsPage";
 import { AdminAccountDetailPage } from "./pages/admin/AdminAccountDetailPage";
 import { AdminDoctorDetailPage } from "./pages/admin/AdminDoctorDetailPage";
 import { AdminPendingDoctorsPage } from "./pages/admin/AdminPendingDoctorsPage";
+import { AdminLoginPage } from "./pages/admin/AdminLoginPage";
+import { AdminHomePage } from "./pages/admin/AdminHomePage";
+import { AdminReportsPage } from "./pages/admin/AdminReportsPage";
 import { DoctorDocumentsPage } from "./pages/doctor/DoctorDocumentsPage";
 import { DoctorHomePage } from "./pages/doctor/DoctorHomePage";
 import { DoctorRequestsPage } from "./pages/doctor/DoctorRequestsPage";
@@ -44,7 +47,7 @@ function IndexRoute() {
       />
     );
   if (role === "ADMIN" || role === "QUAN_TRI_VIEN")
-    return <Navigate to="/admin/pending-doctors" replace />;
+    return <Navigate to="/admin/home" replace />;
   return (
     <Navigate
       to={session.activePortal === "doctor" ? "/doctor/home" : "/app/home"}
@@ -59,6 +62,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<IndexRoute />} />
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/admin/login" element={<AdminLoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
 
         {/* Cụm Route cho Member - Đã bỏ RequireAuth để bạn test UI sau khi Login */}
@@ -101,8 +105,10 @@ export default function App() {
 
         {/* Cụm Route cho Admin */}
         <Route path="/admin" element={<AdminLayout />}>
-          <Route index element={<Navigate to="pending-doctors" replace />} />
+          <Route index element={<Navigate to="home" replace />} />
+          <Route path="home" element={<AdminHomePage />} />
           <Route path="pending-doctors" element={<AdminPendingDoctorsPage />} />
+          <Route path="reports" element={<AdminReportsPage />} />
           <Route path="doctors/:maBacSi" element={<AdminDoctorDetailPage />} />
           <Route path="accounts" element={<AdminAccountsPage />} />
           <Route

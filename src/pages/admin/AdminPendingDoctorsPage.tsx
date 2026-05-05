@@ -17,6 +17,12 @@ export function AdminPendingDoctorsPage() {
     <>
       <PageHeader title="Duyệt hồ sơ bác sĩ" />
 
+      <section className="card" style={{ marginBottom: 16, background: '#f8fafc', borderColor: '#e2e8f0' }}>
+        <p style={{ margin: 0, fontSize: 14, color: '#475569', lineHeight: 1.5 }}>
+          Danh sách bác sĩ có trạng thái hồ sơ chờ duyệt. Chọn <b>Xem</b> để kiểm tra tài liệu và phê duyệt hoặc từ chối.
+        </p>
+      </section>
+
       {query.isLoading ? <div className="muted">Đang tải…</div> : null}
       {query.isError ? (
         <div className="card" style={{ borderColor: 'rgba(239,68,68,0.6)' }}>
