@@ -1957,8 +1957,8 @@
 .account-card {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 20px;
+  gap: 10px;
+  padding: 14px;
   border: 1px solid var(--c-border);
   border-radius: var(--r-lg);
   background: var(--c-surface);
@@ -1976,7 +1976,7 @@
 .account-card__header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   gap: 12px;
 }
 
@@ -2010,10 +2010,10 @@
 }
 
 .account-card__details {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 12px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 10px;
   background: var(--c-surface-lo);
   border-radius: var(--r-lg);
   border: 1px solid var(--c-border);
@@ -2021,10 +2021,9 @@
 
 .account-card__detail-item {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
 }
 
 .account-card__label {
@@ -2045,12 +2044,14 @@
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  align-items: center;
 }
 
 .account-card__footer .btn {
   flex: 1;
-  min-width: 100px;
+  min-width: 88px;
   font-size: 12px;
+  min-height: 38px;
 }
 
 /* ═══════════════════════════════════════════════════════════
