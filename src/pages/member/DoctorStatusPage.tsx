@@ -1,9 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { api } from "../../api/http";
 import type { AccountDoctorInfo } from "../../api/types";
 import { useAuth } from "../../auth/AuthContext";
+import { getApiErrorMessage } from "../../utils/errors";
 import {
   DoctorAvatar,
   DoctorEmptyState,
@@ -17,6 +18,27 @@ import {
 
 // Định nghĩa kiểu cho tài liệu tải lên
 type DocUpload = { id: number; title: string; file: File | null };
+type DoctorFormState = {
+  chuyenKhoa: string;
+  trinhDoChuyenMon: string;
+  maChungChiHanhNghe: string;
+  loaiHinhBacSi: string;
+  tenCoSoYTe: string;
+  diaChiLamViec: string;
+  moTaBanThan: string;
+};
+
+function getInitialDoctorForm(data?: AccountDoctorInfo | null): DoctorFormState {
+  return {
+    chuyenKhoa: data?.chuyenKhoa ?? "",
+    trinhDoChuyenMon: data?.trinhDoChuyenMon ?? "",
+    maChungChiHanhNghe: data?.maChungChiHanhNghe ?? "",
+    loaiHinhBacSi: data?.loaiHinhBacSi ?? "",
+    tenCoSoYTe: data?.tenCoSoYTe ?? "",
+    diaChiLamViec: data?.diaChiLamViec ?? "",
+    moTaBanThan: data?.moTaBanThan ?? "",
+  };
+}
 
 function getActivityStatusMeta(status: string | null | undefined) {
   switch (status) {
@@ -28,27 +50,39 @@ function getActivityStatusMeta(status: string | null | undefined) {
 }
 
 export function DoctorStatusPage() {
-  const navigate = useNavigate();
   const { session } = useAuth();
   const maTaiKhoan = session?.maTaiKhoan ?? null;
 
   // --- TRẠNG THÁI ĐĂNG KÝ ---
   const [isRegistering, setIsRegistering] = useState(false);
+  const [doctorForm, setDoctorForm] = useState<DoctorFormState>(getInitialDoctorForm(null));
   const [docs, setDocs] = useState<DocUpload[]>([{ id: Date.now(), title: "", file: null }]);
 
   const query = useQuery({
     queryKey: ["doctor-status", maTaiKhoan],
     queryFn: async () => {
       if (!maTaiKhoan) throw new Error("Thiếu phiên đăng nhập");
-      const data = await api.get<AccountDoctorInfo>(`/api/auth/account/${maTaiKhoan}/doctor`);
-      return data;
+      const response = await api.get<AccountDoctorInfo>(`/api/auth/account/${maTaiKhoan}/doctor`);
+      return response.data;
     },
     enabled: !!maTaiKhoan,
   });
 
-  const rawData = query.data?.data ?? null;
+  const rawResponse = query.data as any ?? null;
+  const rawData = rawResponse && typeof rawResponse === 'object' && 'trangThaiHoSo' in rawResponse
+    ? (rawResponse as AccountDoctorInfo)
+    : rawResponse && typeof rawResponse === 'object' && 'data' in rawResponse && rawResponse.data
+    ? (rawResponse.data as AccountDoctorInfo)
+    : null;
+  const hasDoctorAccount = rawData?.coTaiKhoanBacSi ?? false;
+  const hasPendingProfile = !hasDoctorAccount && (
+    !!rawData?.trangThaiHoSo || rawData?.maBacSi != null || !!rawData?.chuyenKhoa || !!rawData?.tenCoSoYTe || !!rawData?.maChungChiHanhNghe
+  );
+  const hasDoctorRequest = hasDoctorAccount || hasPendingProfile;
   const activityStatus = rawData ? getActivityStatusMeta(rawData.trangThaiHoatDong) : null;
   const profileStatus = rawData?.trangThaiHoSo ? getProfileStatusMeta(rawData.trangThaiHoSo) : null;
+  const errorMessage = query.isError ? getApiErrorMessage(query.error) : undefined;
+  const shouldShowProfilePanel = hasDoctorRequest;
 
   // Xử lý vùng minh chứng
   const addDocRow = () => setDocs([...docs, { id: Date.now(), title: "", file: null }]);
@@ -68,52 +102,26 @@ export function DoctorStatusPage() {
       />
 
       {query.isLoading ? <DoctorNotice tone="info" title="Đang tải thông tin" description="Hệ thống đang lấy dữ liệu..." /> : null}
+      {query.isError ? <DoctorNotice tone="danger" title="Không tải được dữ liệu" description={errorMessage ?? "Có lỗi xảy ra khi truy xuất hồ sơ bác sĩ."} /> : null}
+      {!maTaiKhoan ? <DoctorNotice tone="warning" title="Chưa đăng nhập" description="Vui lòng đăng nhập để xem trạng thái hồ sơ bác sĩ." /> : null}
+      {!query.isLoading && !query.isError && !rawData ? (
+        <DoctorNotice
+          tone="info"
+          title="Không có hồ sơ bác sĩ"
+          description="Tài khoản hiện tại chưa có hồ sơ bác sĩ hoặc dữ liệu chưa đồng bộ."
+        />
+      ) : null}
+
+      {hasPendingProfile ? (
+        <DoctorNotice
+          tone="warning"
+          title="Hồ sơ đang chờ duyệt"
+          description="Bác sĩ đã gửi hồ sơ, hệ thống đang chờ xét duyệt. Vui lòng đợi quản trị xác nhận."
+        />
+      ) : null}
 
       {rawData ? (
         <>
-          {/* --- HÀNG 1: HERO (GIỮ NGUYÊN) --- */}
-          <section className="doctor-hero">
-            <div className="doctor-hero__content">
-              <div className="doctor-hero__eyebrow">Thông tin tài khoản</div>
-              <h2 className="doctor-hero__title">{rawData.hoLot} {rawData.ten}</h2>
-              <p className="doctor-hero__subtitle">{rawData.email}</p>
-              <div className="doctor-button-row">
-                <Link className="doctor-button doctor-button--primary doctor-button-link" to={`/app/doctors/${rawData.maBacSi}`} style={{ color: '#000' }}>
-                  Xem hồ sơ công khai
-                </Link>
-                {!rawData.coTaiKhoanBacSi && (
-                  <button className="doctor-button doctor-button--secondary" style={{ color: '#000', cursor: 'pointer' }} onClick={() => setIsRegistering(!isRegistering)}>
-                    {isRegistering ? "Hủy đăng ký" : "Mở tài khoản bác sĩ"}
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <div className="doctor-hero__aside">
-              <div className="doctor-profile-strip">
-                <DoctorAvatar name={`${rawData.hoLot} ${rawData.ten}`} />
-                <div>
-                  <h3 className="doctor-profile-strip__name">{rawData.hoLot} {rawData.ten}</h3>
-                  <p className="doctor-profile-strip__meta">{rawData.chuyenKhoa}<br />{rawData.tenCoSoYTe}</p>
-                </div>
-              </div>
-              {activityStatus && <DoctorStatusBadge label={activityStatus.label} tone={activityStatus.tone} />}
-              <div className="doctor-keyfacts">
-                <div className="doctor-keyfact"><span className="doctor-keyfact__label">Mã hồ sơ bác sĩ</span><span className="doctor-keyfact__value">#{rawData.maBacSi}</span></div>
-                <div className="doctor-keyfact"><span className="doctor-keyfact__label">Mã CCHN</span><span className="doctor-keyfact__value">{rawData.maChungChiHanhNghe || 'Chưa có'}</span></div>
-              </div>
-            </div>
-          </section>
-
-          {/* --- HÀNG 2: THẺ CHỈ SỐ (STATS - PHỤC HỒI ĐẦY ĐỦ) --- */}
-          <section className="doctor-metrics-grid">
-            <DoctorStatCard label="Tài khoản" value={activityStatus?.label ?? "—"} hint="Trạng thái truy cập hệ thống." />
-            <DoctorStatCard label="Hồ sơ bác sĩ" value={profileStatus?.label ?? "—"} hint={profileStatus?.description ?? "Kiểm tra hồ sơ định kỳ."} />
-            <DoctorStatCard label="Chuyên khoa" value={rawData.chuyenKhoa ?? "Chưa cập nhật"} hint="Hiển thị với bệnh nhân." />
-            <DoctorStatCard label="Cơ sở y tế" value={rawData.tenCoSoYTe ?? "Chưa cập nhật"} hint="Bệnh viện đang công tác." />
-          </section>
-
-          {/* --- HÀNG 3: FORM ĐĂNG KÝ GỘP (HIỂN THỊ KHI NHẤN NÚT) --- */}
           {isRegistering ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '25px', marginBottom: '30px' }}>
               <DoctorPanel title="Thông tin chuyên môn (Theo thiết kế ERD)">
@@ -121,29 +129,70 @@ export function DoctorStatusPage() {
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
                     <div className="doctor-meta-item">
                       <span className="doctor-meta-item__label">CHUYÊN KHOA</span>
-                      <input type="text" placeholder="Vd: Nội khoa..." style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid #E5E7EB', color: '#000' }} />
+                      <input
+                        type="text"
+                        value={doctorForm.chuyenKhoa}
+                        onChange={(e) => setDoctorForm(prev => ({ ...prev, chuyenKhoa: e.target.value }))}
+                        placeholder="Vd: Nội khoa..."
+                        style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid #E5E7EB', color: '#000' }}
+                      />
                     </div>
                     <div className="doctor-meta-item">
                       <span className="doctor-meta-item__label">TRÌNH ĐỘ CHUYÊN MÔN</span>
-                      <input type="text" placeholder="Vd: Thạc sĩ, CK1..." style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid #E5E7EB', color: '#000' }} />
+                      <input
+                        type="text"
+                        value={doctorForm.trinhDoChuyenMon}
+                        onChange={(e) => setDoctorForm(prev => ({ ...prev, trinhDoChuyenMon: e.target.value }))}
+                        placeholder="Vd: Thạc sĩ, CK1..."
+                        style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid #E5E7EB', color: '#000' }}
+                      />
                     </div>
                     <div className="doctor-meta-item">
                       <span className="doctor-meta-item__label">MÃ CCHN (UNIQUE)</span>
-                      <input type="text" placeholder="Nhập số CCHN" style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid #E5E7EB', color: '#000' }} />
+                      <input
+                        type="text"
+                        value={doctorForm.maChungChiHanhNghe}
+                        onChange={(e) => setDoctorForm(prev => ({ ...prev, maChungChiHanhNghe: e.target.value }))}
+                        placeholder="Nhập số CCHN"
+                        style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid #E5E7EB', color: '#000' }}
+                      />
                     </div>
                     <div className="doctor-meta-item">
                       <span className="doctor-meta-item__label">LOẠI HÌNH BÁC SĨ</span>
-                      <input type="text" placeholder="Vd: Bác sĩ tư vấn" style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid #E5E7EB', color: '#000' }} />
+                      <input
+                        type="text"
+                        value={doctorForm.loaiHinhBacSi}
+                        onChange={(e) => setDoctorForm(prev => ({ ...prev, loaiHinhBacSi: e.target.value }))}
+                        placeholder="Vd: Bác sĩ tư vấn"
+                        style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid #E5E7EB', color: '#000' }}
+                      />
                     </div>
                   </div>
                   <div className="doctor-meta-item">
                     <span className="doctor-meta-item__label">TÊN CƠ SỞ Y TẾ & ĐỊA CHỈ</span>
-                    <input type="text" placeholder="Tên bệnh viện" style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid #E5E7EB', color: '#000', marginBottom: '10px' }} />
-                    <input type="text" placeholder="Địa chỉ cơ sở" style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid #E5E7EB', color: '#000' }} />
+                    <input
+                      type="text"
+                      value={doctorForm.tenCoSoYTe}
+                      onChange={(e) => setDoctorForm(prev => ({ ...prev, tenCoSoYTe: e.target.value }))}
+                      placeholder="Tên bệnh viện"
+                      style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid #E5E7EB', color: '#000', marginBottom: '10px' }}
+                    />
+                    <input
+                      type="text"
+                      value={doctorForm.diaChiLamViec}
+                      onChange={(e) => setDoctorForm(prev => ({ ...prev, diaChiLamViec: e.target.value }))}
+                      placeholder="Địa chỉ cơ sở"
+                      style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid #E5E7EB', color: '#000' }}
+                    />
                   </div>
                   <div className="doctor-meta-item">
                     <span className="doctor-meta-item__label">MÔ TẢ BẢN THÂN</span>
-                    <textarea placeholder="Giới thiệu kinh nghiệm..." style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid #E5E7EB', color: '#000', minHeight: '80px' }} />
+                    <textarea
+                      value={doctorForm.moTaBanThan}
+                      onChange={(e) => setDoctorForm(prev => ({ ...prev, moTaBanThan: e.target.value }))}
+                      placeholder="Giới thiệu kinh nghiệm..."
+                      style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid #E5E7EB', color: '#000', minHeight: '80px' }}
+                    />
                   </div>
                 </div>
               </DoctorPanel>
@@ -161,34 +210,92 @@ export function DoctorStatusPage() {
                     </div>
                   ))}
                 </div>
-                <button 
-                  className="doctor-button doctor-button--primary" 
-                  style={{ width: '100%', marginTop: '20px', color: '#000', fontWeight: 'bold' }}
-                  onClick={() => { alert("Gửi duyệt thành công!"); setIsRegistering(false); }}
-                >
-                  GỬI HỒ SƠ DUYỆT
-                </button>
-              </DoctorPanel>
-            </div>
-          ) : (
-            /* --- HÀNG CUỐI: PANEL CHI TIẾT HOẶC EMPTY STATE --- */
-            rawData.coTaiKhoanBacSi ? (
-              <DoctorPanel title="Dữ liệu hồ sơ hiện tại">
-                <div className="doctor-meta-list">
-                  <div className="doctor-meta-item"><span className="doctor-meta-item__label">Họ tên bác sĩ</span><div className="doctor-meta-item__value">{rawData.hoLot} {rawData.ten}</div></div>
-                  <div className="doctor-meta-item"><span className="doctor-meta-item__label">Mã chứng chỉ</span><div className="doctor-meta-item__value">{rawData.maChungChiHanhNghe}</div></div>
-                  <div className="doctor-meta-item"><span className="doctor-meta-item__label">Nơi công tác</span><div className="doctor-meta-item__value">{rawData.tenCoSoYTe}</div></div>
+                <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
+                  <button
+                    className="doctor-button doctor-button--secondary"
+                    style={{ flex: 1, color: '#000', fontWeight: 'bold' }}
+                    onClick={() => setIsRegistering(false)}
+                  >
+                    Hủy
+                  </button>
+                  <button 
+                    className="doctor-button doctor-button--primary" 
+                    style={{ flex: 1, color: '#000', fontWeight: 'bold' }}
+                    onClick={() => { alert(hasDoctorAccount ? "Cập nhật hồ sơ thành công!" : "Gửi duyệt hồ sơ thành công!"); setIsRegistering(false); }}
+                  >
+                    {hasDoctorAccount ? "Cập nhật hồ sơ" : "Gửi hồ sơ duyệt"}
+                  </button>
                 </div>
               </DoctorPanel>
-            ) : (
-              <DoctorPanel title="Hồ sơ bác sĩ">
-                <DoctorEmptyState 
-                  title="Bạn chưa có hồ sơ bác sĩ" 
-                  description="Bắt đầu đăng ký để tham gia hệ thống khám chữa bệnh."
-                  action={<button className="doctor-button doctor-button--primary" style={{ color: '#000' }} onClick={() => setIsRegistering(true)}>Bắt đầu đăng ký ngay</button>} 
-                />
-              </DoctorPanel>
-            )
+            </div>
+          ) : shouldShowProfilePanel ? (
+            <>
+              {/* --- HÀNG 1: HERO --- */}
+              <section className="doctor-hero">
+                <div className="doctor-hero__content">
+                  <div className="doctor-hero__eyebrow">Thông tin tài khoản</div>
+                  <h2 className="doctor-hero__title">{rawData.hoLot} {rawData.ten}</h2>
+                  <p className="doctor-hero__subtitle">{rawData.email}</p>
+                  <div className="doctor-button-row">
+                    {hasDoctorAccount ? (
+                      <Link className="doctor-button doctor-button--primary doctor-button-link" to={`/app/doctors/${rawData.maBacSi}`} style={{ color: '#000' }}>
+                        Xem hồ sơ công khai
+                      </Link>
+                    ) : null}
+                    <button
+                      className="doctor-button doctor-button--secondary"
+                      style={{ color: '#000', cursor: 'pointer' }}
+                      onClick={() => {
+                        setDoctorForm(getInitialDoctorForm(rawData));
+                        setIsRegistering(true);
+                      }}
+                    >
+                      {hasDoctorAccount ? "Cập nhật hồ sơ bác sĩ" : "Cập nhật thông tin hồ sơ"}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="doctor-hero__aside">
+                  <div className="doctor-profile-strip">
+                    <DoctorAvatar name={`${rawData.hoLot} ${rawData.ten}`} />
+                    <div>
+                      <h3 className="doctor-profile-strip__name">{rawData.hoLot} {rawData.ten}</h3>
+                      <p className="doctor-profile-strip__meta">{rawData.chuyenKhoa || 'Chưa cập nhật'}<br />{rawData.tenCoSoYTe || 'Chưa cập nhật'}</p>
+                    </div>
+                  </div>
+                  {profileStatus && <DoctorStatusBadge label={profileStatus.label} tone={profileStatus.tone} />}
+                  <div className="doctor-keyfacts">
+                    <div className="doctor-keyfact"><span className="doctor-keyfact__label">Mã hồ sơ bác sĩ</span><span className="doctor-keyfact__value">{hasDoctorAccount ? `#${rawData.maBacSi}` : 'Chưa có'}</span></div>
+                    <div className="doctor-keyfact"><span className="doctor-keyfact__label">Mã CCHN</span><span className="doctor-keyfact__value">{rawData.maChungChiHanhNghe || 'Chưa có'}</span></div>
+                  </div>
+                </div>
+              </section>
+
+              <section className="doctor-metrics-grid">
+                <DoctorStatCard label="Tài khoản" value={activityStatus?.label ?? "—"} hint="Trạng thái truy cập hệ thống." />
+                <DoctorStatCard label="Hồ sơ bác sĩ" value={profileStatus?.label ?? "—"} hint={profileStatus?.description ?? "Kiểm tra hồ sơ định kỳ."} />
+                <DoctorStatCard label="Chuyên khoa" value={rawData.chuyenKhoa ?? "Chưa cập nhật"} hint="Hiển thị với bệnh nhân." />
+                <DoctorStatCard label="Cơ sở y tế" value={rawData.tenCoSoYTe ?? "Chưa cập nhật"} hint="Bệnh viện đang công tác." />
+              </section>
+
+              {hasDoctorAccount ? (
+                <DoctorPanel title="Dữ liệu hồ sơ hiện tại">
+                  <div className="doctor-meta-list">
+                    <div className="doctor-meta-item"><span className="doctor-meta-item__label">Họ tên bác sĩ</span><div className="doctor-meta-item__value">{rawData.hoLot} {rawData.ten}</div></div>
+                    <div className="doctor-meta-item"><span className="doctor-meta-item__label">Mã chứng chỉ</span><div className="doctor-meta-item__value">{rawData.maChungChiHanhNghe}</div></div>
+                    <div className="doctor-meta-item"><span className="doctor-meta-item__label">Nơi công tác</span><div className="doctor-meta-item__value">{rawData.tenCoSoYTe}</div></div>
+                  </div>
+                </DoctorPanel>
+              ) : null}
+            </>
+          ) : (
+            <DoctorPanel title="Hồ sơ bác sĩ">
+              <DoctorEmptyState 
+                title="Bạn chưa có hồ sơ bác sĩ" 
+                description="Bắt đầu đăng ký để tham gia hệ thống khám chữa bệnh."
+                action={<button className="doctor-button doctor-button--primary" style={{ color: '#000' }} onClick={() => setIsRegistering(true)}>Bắt đầu đăng ký ngay</button>} 
+              />
+            </DoctorPanel>
           )}
         </>
       ) : null}
