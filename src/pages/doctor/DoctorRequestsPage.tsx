@@ -25,6 +25,14 @@ type NoticeState = {
 
 type RequestTab = 'all' | 'pending' | 'approved' | 'rejected'
 
+function isRejectedStatus(status: string) {
+  return status === 'TU_CHOI' || status === 'DA_TU_CHOI' || status === 'DA_HUY'
+}
+
+function isApprovedStatus(status: string) {
+  return status === 'DA_DUYET' || status === 'DA_XAC_NHAN'
+}
+
 const TAB_LABELS: Record<RequestTab, string> = {
   all: 'Tất cả',
   pending: 'Chờ xác nhận',
@@ -52,14 +60,14 @@ export function DoctorRequestsPage() {
 
   const filteredRequests = useMemo(() => {
     if (activeTab === 'pending') return requests.filter((request) => request.trangThaiPhieu === 'CHO_XAC_NHAN')
-    if (activeTab === 'approved') return requests.filter((request) => request.trangThaiPhieu === 'DA_DUYET')
-    if (activeTab === 'rejected') return requests.filter((request) => request.trangThaiPhieu === 'TU_CHOI')
+    if (activeTab === 'approved') return requests.filter((request) => isApprovedStatus(request.trangThaiPhieu))
+    if (activeTab === 'rejected') return requests.filter((request) => isRejectedStatus(request.trangThaiPhieu))
     return requests
   }, [activeTab, requests])
 
   const pendingCount = useMemo(() => requests.filter((request) => request.trangThaiPhieu === 'CHO_XAC_NHAN').length, [requests])
-  const approvedCount = useMemo(() => requests.filter((request) => request.trangThaiPhieu === 'DA_DUYET').length, [requests])
-  const rejectedCount = useMemo(() => requests.filter((request) => request.trangThaiPhieu === 'TU_CHOI').length, [requests])
+  const approvedCount = useMemo(() => requests.filter((request) => isApprovedStatus(request.trangThaiPhieu)).length, [requests])
+  const rejectedCount = useMemo(() => requests.filter((request) => isRejectedStatus(request.trangThaiPhieu)).length, [requests])
 
   const approve = useMutation({
     mutationFn: async (maPhieuDatLich: number) => {

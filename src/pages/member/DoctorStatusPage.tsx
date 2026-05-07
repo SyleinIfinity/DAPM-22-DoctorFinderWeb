@@ -28,6 +28,21 @@ type DoctorFormState = {
   moTaBanThan: string;
 };
 
+const specialtyOptions = [
+  'Tim mạch',
+  'Thần kinh',
+  'Nha khoa',
+  'Nhi khoa',
+  'Tai mũi họng',
+  'Da liễu',
+  'Sản phụ khoa',
+  'Cơ xương khớp',
+  'Nội khoa',
+  'Ngoại khoa',
+  'Mắt',
+  'Ung bướu',
+];
+
 type DoctorApiEnvelope = { data?: AccountDoctorInfo | null } | null;
 
 function createDocUpload(): DocUpload {
@@ -175,13 +190,16 @@ export function DoctorStatusPage() {
                   >
                     <div className="doctor-meta-item">
                       <span className="doctor-meta-item__label">CHUYÊN KHOA</span>
-                      <input
-                        type="text"
+                      <select
                         value={doctorForm.chuyenKhoa}
                         onChange={(e) => setDoctorForm(prev => ({ ...prev, chuyenKhoa: e.target.value }))}
-                        placeholder="Vd: Nội khoa..."
-                        style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid #E5E7EB', color: '#000' }}
-                      />
+                        style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid #E5E7EB', color: '#000', background: '#fff' }}
+                      >
+                        <option value="">Chọn chuyên khoa</option>
+                        {specialtyOptions.map((specialty) => (
+                          <option key={specialty} value={specialty}>{specialty}</option>
+                        ))}
+                      </select>
                     </div>
                     <div className="doctor-meta-item">
                       <span className="doctor-meta-item__label">TRÌNH ĐỘ CHUYÊN MÔN</span>

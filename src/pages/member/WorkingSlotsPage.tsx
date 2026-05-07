@@ -1,340 +1,157 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { api } from "../../api/http";
+import type { DoctorProfile, WorkingSlot } from "../../api/types";
 import { PageHeader } from "../../components/PageHeader";
+import { useAuth } from "../../auth/AuthContext";
+import { getApiErrorMessage } from "../../utils/errors";
+
+function ymd(date: Date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function addDays(date: Date, days: number) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function monthGrid(anchor: Date) {
+  const first = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+  const start = new Date(first);
+  start.setDate(first.getDate() - first.getDay());
+  return Array.from({ length: 42 }, (_, index) => addDays(start, index));
+}
+
+function formatDateLong(value: string) {
+  const [year, month, day] = value.split("-");
+  return `${day}/${month}/${year}`;
+}
 
 export function WorkingSlotsPage() {
   const params = useParams();
   const navigate = useNavigate();
+  const { session } = useAuth();
   const maBacSi = Number(params.maBacSi);
+  const [monthAnchor, setMonthAnchor] = useState(() => new Date());
+  const [selectedDate, setSelectedDate] = useState(ymd(new Date()));
+  const [selectedSlot, setSelectedSlot] = useState<WorkingSlot | null>(null);
 
-  const [date, setDate] = useState<string>("2026-04-29");
-  const [selected, setSelected] = useState<any>(null);
-
-  const doctor = {
-    hoTen: "BS. Nguyễn Thanh Tùng",
-    chuyenKhoa: "Thần kinh học · BV Bạch Mai",
-    rating: "4.9 ★",
-  };
-
-  const slotsQuery = useQuery({
-    queryKey: ["working-slots", maBacSi, date],
-    queryFn: async () =>
-      [
-        { maChiTiet: 1, gioBatDau: "08:00", trangThai: "TRONG", buoi: "SANG" },
-        { maChiTiet: 2, gioBatDau: "08:30", trangThai: "TRONG", buoi: "SANG" },
-        { maChiTiet: 3, gioBatDau: "09:00", trangThai: "DA_DAT", buoi: "SANG" },
-        { maChiTiet: 4, gioBatDau: "14:00", trangThai: "TRONG", buoi: "CHIEU" },
-        { maChiTiet: 5, gioBatDau: "14:30", trangThai: "TRONG", buoi: "CHIEU" },
-      ] as any[],
+  const doctorQuery = useQuery({
+    queryKey: ["doctor-profile", maBacSi, session?.maTaiKhoan],
+    queryFn: async () => (await api.get<DoctorProfile>(`/api/doctors/${maBacSi}`, {
+      params: session?.maTaiKhoan ? { viewerMaTaiKhoan: session.maTaiKhoan } : {},
+    })).data,
+    enabled: Number.isFinite(maBacSi) && maBacSi > 0,
   });
 
+  const scheduleQuery = useQuery({
+    queryKey: ["doctor-working-slots", maBacSi, selectedDate],
+    queryFn: async () => (await api.get<WorkingSlot[]>(`/api/doctors/${maBacSi}/working-slots`, { params: { date: selectedDate } })).data,
+    enabled: Number.isFinite(maBacSi) && maBacSi > 0,
+  });
+
+  const calendarDays = monthGrid(monthAnchor);
+  const slots = scheduleQuery.data || [];
+  const selectedDaySlots = useMemo(() => slots.filter((slot) => (slot.ngayCuThe || selectedDate) === selectedDate), [slots, selectedDate]);
+  const selectedDoctor = doctorQuery.data;
+
   return (
-    <div
-      style={{
-        backgroundColor: "#F4F7F8",
-        minHeight: "100vh",
-        paddingBottom: "100px",
-      }}
-    >
+    <div className="member-page-shell">
       <PageHeader
         title="Đặt lịch khám"
-        right={
-          <span style={{ fontSize: "12px", color: "#0d9488" }}>Bước 1 / 3</span>
-        }
+        right={<span className="member-link">Bước 1 / 3</span>}
       />
 
-      <div style={{ maxWidth: "500px", margin: "0 auto", padding: "15px" }}>
-        {/* INFO CARD */}
-        <div
-          className="card row-between"
-          style={{
-            padding: "15px",
-            borderRadius: "15px",
-            marginBottom: "15px",
-            backgroundColor: "#fff",
-          }}
-        >
-          <div className="row" style={{ gap: "12px" }}>
-            <div
-              style={{
-                width: "45px",
-                height: "45px",
-                borderRadius: "50%",
-                backgroundColor: "#eee",
-                display: "grid",
-                placeItems: "center",
-                fontSize: "20px",
-              }}
-            >
-              👤
-            </div>
-            <div>
-              <div style={{ fontWeight: "bold", fontSize: "15px" }}>
-                {doctor.hoTen}
-              </div>
-              <div style={{ fontSize: "12px", color: "#666" }}>
-                {doctor.chuyenKhoa}
-              </div>
-            </div>
-          </div>
-          <div
-            style={{ fontSize: "13px", color: "#0d9488", fontWeight: "bold" }}
-          >
-            {doctor.rating}
-          </div>
-        </div>
+      {doctorQuery.isError ? <div className="member-panel member-panel--error">{getApiErrorMessage(doctorQuery.error)}</div> : null}
+      {scheduleQuery.isError ? <div className="member-panel member-panel--error">{getApiErrorMessage(scheduleQuery.error)}</div> : null}
 
-        {/* DATE STRIP */}
-        <div
-          className="card"
-          style={{
-            padding: "0",
-            borderRadius: "15px",
-            overflow: "hidden",
-            marginBottom: "15px",
-            backgroundColor: "#fff",
-          }}
-        >
-          <div style={{ display: "flex", borderBottom: "1px solid #eee" }}>
-            <div
-              style={{
-                flex: 1,
-                textAlign: "center",
-                padding: "12px",
-                color: "#0d9488",
-                borderBottom: "2px solid #0d9488",
-                fontWeight: "bold",
-              }}
-            >
-              LỊCH TUẦN
+      <section className="member-panel member-booking-grid">
+        <div className="member-booking-calendar">
+          <div className="member-panel__header">
+            <div>
+              <div className="member-panel__title">Lịch tháng</div>
+              <div className="member-panel__subtitle">Bấm vào từng ngày để xem khung giờ khả dụng</div>
             </div>
-            <div
-              style={{
-                flex: 1,
-                textAlign: "center",
-                padding: "12px",
-                color: "#666",
-              }}
-            >
-              NGÀY CỤ THỂ
+            <div className="member-booking-calendar__nav">
+              <button type="button" className="btn btn-outline" onClick={() => setMonthAnchor(addDays(monthAnchor, -30))}>Tháng trước</button>
+              <button type="button" className="btn btn-outline" onClick={() => setMonthAnchor(addDays(monthAnchor, 30))}>Tháng sau</button>
             </div>
           </div>
-          <div
-            style={{
-              display: "flex",
-              gap: "10px",
-              padding: "15px",
-              overflowX: "auto",
-            }}
-          >
-            {[29, 30, 1, 2, 3, 4, 5].map((d) => {
-              const fullDate = `2026-04-${d < 10 ? "0" + d : d}`;
-              const isActive = date.endsWith(d.toString());
+          <div className="member-booking-calendar__month">{monthAnchor.toLocaleDateString("vi-VN", { month: "long", year: "numeric" })}</div>
+          <div className="member-booking-calendar__grid">
+            {["CN", "T2", "T3", "T4", "T5", "T6", "T7"].map((day) => <div key={day} className="member-booking-calendar__weekday">{day}</div>)}
+            {calendarDays.map((day) => {
+              const dateKey = ymd(day);
+              const active = dateKey === selectedDate;
+              const available = dateKey >= ymd(new Date()) && dateKey <= ymd(addDays(new Date(), 60));
               return (
-                <div
-                  key={d}
-                  onClick={() => setDate(fullDate)}
-                  style={{
-                    minWidth: "55px",
-                    padding: "10px 0",
-                    borderRadius: "12px",
-                    border: isActive ? "1.5px solid #0d9488" : "1px solid #eee",
-                    textAlign: "center",
-                    backgroundColor: isActive ? "#f0fdfa" : "#fff",
-                    cursor: "pointer",
-                    transition: "0.2s",
-                  }}
+                <button
+                  key={dateKey}
+                  type="button"
+                  className={active ? "member-booking-calendar__day is-active" : "member-booking-calendar__day"}
+                  onClick={() => setSelectedDate(dateKey)}
                 >
-                  <div
-                    style={{
-                      fontSize: "11px",
-                      color: isActive ? "#0d9488" : "#999",
-                    }}
-                  >
-                    T{d === 29 ? "3" : "?"}
-                  </div>
-                  <div
-                    style={{
-                      fontWeight: "bold",
-                      fontSize: "16px",
-                      color: isActive ? "#0d9488" : "#333",
-                    }}
-                  >
-                    {d}
-                  </div>
-                </div>
+                  <span>{day.getDate()}</span>
+                  <small>{available ? (active ? "Đang chọn" : "Trống") : "Hết hạn"}</small>
+                </button>
               );
             })}
           </div>
         </div>
 
-        {/* TIME GRID */}
-        <div
-          className="card"
-          style={{
-            padding: "20px",
-            borderRadius: "15px",
-            marginBottom: "15px",
-            backgroundColor: "#fff",
-          }}
-        >
-          <div
-            style={{
-              fontSize: "13px",
-              fontWeight: "bold",
-              marginBottom: "12px",
-            }}
-          >
-            ☀️ Buổi sáng
-          </div>
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: "10px",
-              marginBottom: "20px",
-            }}
-          >
-            {slotsQuery.data
-              ?.filter((s) => s.buoi === "SANG")
-              .map((s) => (
-                <button
-                  key={s.maChiTiet}
-                  onClick={() => setSelected(s)}
-                  disabled={s.trangThai !== "TRONG"}
-                  style={{
-                    padding: "10px 18px",
-                    borderRadius: "8px",
-                    border: "none",
-                    backgroundColor:
-                      selected?.maChiTiet === s.maChiTiet
-                        ? "#0d9488"
-                        : s.trangThai === "TRONG"
-                          ? "#e2e8f0"
-                          : "#f1f5f9",
-                    color:
-                      selected?.maChiTiet === s.maChiTiet
-                        ? "#fff"
-                        : s.trangThai === "TRONG"
-                          ? "#333"
-                          : "#cbd5e1",
-                    fontWeight: "600",
-                    cursor: s.trangThai === "TRONG" ? "pointer" : "not-allowed",
-                    transition: "0.2s",
-                  }}
-                >
-                  {s.gioBatDau}
-                </button>
-              ))}
+        <aside className="member-booking-detail">
+          <div className="member-panel__header">
+            <div>
+              <div className="member-panel__title">Chi tiết lịch khả dụng</div>
+              <div className="member-panel__subtitle">{formatDateLong(selectedDate)}</div>
+            </div>
           </div>
 
-          <div
-            style={{
-              fontSize: "13px",
-              fontWeight: "bold",
-              marginBottom: "12px",
-            }}
-          >
-            🌙 Buổi chiều
+          <div className="member-booking-doctor-card">
+            <div className="member-booking-doctor-card__avatar">{selectedDoctor?.hoTenDayDu?.slice(0, 2).toUpperCase() || "BS"}</div>
+            <div>
+              <strong>{selectedDoctor?.hoTenDayDu || "Bác sĩ"}</strong>
+              <p>{selectedDoctor?.chuyenKhoa || "Chưa có thông tin chuyên khoa"}</p>
+            </div>
           </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
-            {slotsQuery.data
-              ?.filter((s) => s.buoi === "CHIEU")
-              .map((s) => (
-                <button
-                  key={s.maChiTiet}
-                  onClick={() => setSelected(s)}
-                  disabled={s.trangThai !== "TRONG"}
-                  style={{
-                    padding: "10px 18px",
-                    borderRadius: "8px",
-                    border: "none",
-                    backgroundColor:
-                      selected?.maChiTiet === s.maChiTiet
-                        ? "#0d9488"
-                        : "#e2e8f0",
-                    color:
-                      selected?.maChiTiet === s.maChiTiet ? "#fff" : "#333",
-                    fontWeight: "600",
-                    cursor: "pointer",
-                  }}
-                >
-                  {s.gioBatDau}
-                </button>
-              ))}
+
+          {scheduleQuery.isLoading ? <div className="member-empty-state">Đang tải lịch khả dụng...</div> : null}
+          {!scheduleQuery.isLoading && selectedDaySlots.length === 0 ? <div className="member-empty-state">Ngày này chưa có khung giờ khả dụng.</div> : null}
+
+          <div className="member-slot-list">
+            {selectedDaySlots.map((slot) => (
+              <button
+                key={slot.maChiTiet}
+                type="button"
+                className={selectedSlot?.maChiTiet === slot.maChiTiet ? "member-slot-card is-active" : "member-slot-card"}
+                onClick={() => setSelectedSlot(slot)}
+              >
+                <strong>{slot.gioBatDau.slice(0, 5)} - {slot.gioKetThuc.slice(0, 5)}</strong>
+                <span>{slot.trangThaiLich}</span>
+                <small>{slot.trangThai === "TRONG" ? "Còn chỗ" : "Đã có người chọn"}</small>
+              </button>
+            ))}
           </div>
-        </div>
 
-        <div
-          style={{
-            backgroundColor: "#e6fffa",
-            padding: "12px 15px",
-            borderRadius: "12px",
-            color: "#0d9488",
-            fontSize: "13px",
-            border: "1px solid #b2f2e9",
-          }}
-        >
-          📅 Đã chọn: <b>Thứ Ba {date.split("-").reverse().join("/")}</b> -{" "}
-          <b>{selected ? selected.gioBatDau : "--:--"}</b>
-        </div>
-      </div>
+          <div className="member-slot-summary">
+            <div><span>Ngày</span><strong>{formatDateLong(selectedDate)}</strong></div>
+            <div><span>Khung giờ</span><strong>{selectedSlot ? selectedSlot.gioBatDau.slice(0, 5) : "--:--"}</strong></div>
+          </div>
+        </aside>
+      </section>
 
-      {/* FOOTER */}
-      <div
-        style={{
-          position: "fixed",
-          bottom: 0,
-          left: 0,
-          right: 0,
-          padding: "15px 20px 30px",
-          backgroundColor: "#fff",
-          borderTop: "1px solid #eee",
-          display: "flex",
-          gap: "15px",
-          zIndex: 100,
-        }}
-      >
+      <div className="member-sticky-actions">
+        <button onClick={() => navigate(-1)} className="btn btn-outline">Hủy</button>
         <button
-          onClick={() => navigate(-1)}
-          style={{
-            flex: 1,
-            padding: "14px",
-            borderRadius: "25px",
-            border: "1px solid #eee",
-            background: "#fff",
-            cursor: "pointer",
-            fontWeight: "bold",
-            color: "#666",
-          }}
-        >
-          Hủy
-        </button>
-        <button
-          disabled={!selected}
-          onClick={() => {
-            console.log("Navigating to step 2...");
-            // Đảm bảo URL này khớp với Route trong App.tsx
-            navigate(`/app/appointments/new`, {
-              state: {
-                doctor,
-                selectedSlot: selected,
-                date,
-              },
-            });
-          }}
-          style={{
-            flex: 2,
-            padding: "14px",
-            borderRadius: "25px",
-            border: "none",
-            backgroundColor: selected ? "#0d9488" : "#ccc",
-            color: "#fff",
-            fontWeight: "bold",
-            cursor: selected ? "pointer" : "not-allowed",
-            boxShadow: selected ? "0 4px 12px rgba(13, 148, 136, 0.2)" : "none",
-          }}
+          disabled={!selectedSlot}
+          onClick={() => navigate("/app/appointments/new", { state: { doctor: selectedDoctor, selected: selectedSlot, date: selectedDate } })}
+          className="btn btn-primary"
+          type="button"
         >
           Tiếp tục
         </button>

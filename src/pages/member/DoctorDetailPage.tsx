@@ -2,7 +2,7 @@ import { Link, useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { PageHeader } from "../../components/PageHeader";
 import { api } from "../../api/http";
-import type { DoctorProfile } from "../../api/types";
+import type { DoctorProfile, RatingSummary, Review } from "../../api/types";
 import { getApiErrorMessage } from "../../utils/errors";
 import { useAuth } from "../../auth/AuthContext";
 
@@ -12,7 +12,7 @@ export function DoctorDetailPage() {
   const { session } = useAuth();
   const maBacSi = Number(params.maBacSi);
 
-  const query = useQuery({
+  const profileQuery = useQuery({
     queryKey: ["doctor-profile", maBacSi, session?.maTaiKhoan],
     queryFn: async () =>
       (
@@ -23,42 +23,46 @@ export function DoctorDetailPage() {
     enabled: Number.isFinite(maBacSi) && maBacSi > 0,
   });
 
+  const ratingQuery = useQuery({
+    queryKey: ["doctor-rating-summary", maBacSi],
+    queryFn: async () => (await api.get<RatingSummary>(`/api/reviews/doctors/${maBacSi}/summary`)).data,
+    enabled: Number.isFinite(maBacSi) && maBacSi > 0,
+  });
+
+  const reviewQuery = useQuery({
+    queryKey: ["doctor-reviews", maBacSi],
+    queryFn: async () => (await api.get<Review[]>(`/api/reviews/doctors/${maBacSi}`)).data,
+    enabled: Number.isFinite(maBacSi) && maBacSi > 0,
+  });
+
   if (!Number.isFinite(maBacSi) || maBacSi <= 0) {
     return (
-      <main style={{ backgroundColor: "#f8f9fa", minHeight: "100vh" }}>
+      <main className="member-page-shell">
         <PageHeader title="Hồ sơ bác sĩ" />
-        <div className="container" style={{ padding: "20px", textAlign: "center" }}>
-          URL không hợp lệ hoặc không tìm thấy bác sĩ.
-        </div>
+        <div className="member-panel">URL không hợp lệ hoặc không tìm thấy bác sĩ.</div>
       </main>
     );
   }
 
-  if (query.isLoading) {
+  if (profileQuery.isLoading) {
     return (
-      <main style={{ backgroundColor: "#f8f9fa", minHeight: "100vh" }}>
+      <main className="member-page-shell">
         <PageHeader title="Hồ sơ bác sĩ" />
-        <div className="container" style={{ padding: "20px" }}>
-          <div className="muted">Đang tải hồ sơ…</div>
-        </div>
+        <div className="member-panel">Đang tải hồ sơ…</div>
       </main>
     );
   }
 
-  if (query.isError || !query.data) {
+  if (profileQuery.isError || !profileQuery.data) {
     return (
-      <main style={{ backgroundColor: "#f8f9fa", minHeight: "100vh" }}>
+      <main className="member-page-shell">
         <PageHeader title="Hồ sơ bác sĩ" />
-        <div className="container" style={{ padding: "20px" }}>
-          <div className="card" style={{ borderColor: "rgba(239,68,68,0.5)" }}>
-            {getApiErrorMessage(query.error)}
-          </div>
-        </div>
+        <div className="member-panel member-panel--error">{getApiErrorMessage(profileQuery.error)}</div>
       </main>
     );
   }
 
-  const doctor = query.data;
+  const doctor = profileQuery.data;
   const initials =
     (doctor.hoTenDayDu || "BS")
       .split(/\s+/)
@@ -67,206 +71,71 @@ export function DoctorDetailPage() {
       .slice(0, 2)
       .toUpperCase() || "BS";
 
+  const rating = ratingQuery.data;
+
   return (
-    <main style={{ backgroundColor: "#f8f9fa", minHeight: "100vh" }}>
+    <main className="member-page-shell">
       <PageHeader
         title="Hồ sơ bác sĩ"
-        right={
-          <Link to="/app/home" style={{ color: "#0d9488", textDecoration: "none", fontWeight: "600" }}>
-            Tìm bác sĩ khác
-          </Link>
-        }
+        right={<Link to="/app/home" className="member-link">Tìm bác sĩ khác</Link>}
       />
 
-      <div className="container" style={{ maxWidth: "800px", margin: "0 auto", padding: "20px" }}>
-        <div
-          style={{
-            backgroundColor: "#fff",
-            borderRadius: "24px",
-            padding: "30px",
-            marginBottom: "20px",
-            boxShadow: "0 2px 12px rgba(0,0,0,0.05)",
-          }}
-        >
-          <div style={{ display: "flex", gap: "24px", alignItems: "flex-start", position: "relative" }}>
-            <div
-              style={{
-                width: "100px",
-                height: "100px",
-                borderRadius: "50%",
-                backgroundColor: "#0d9488",
-                color: "#fff",
-                display: "grid",
-                placeItems: "center",
-                fontSize: "28px",
-                fontWeight: "bold",
-                flexShrink: 0,
-                overflow: "hidden",
-              }}
-            >
-              {doctor.anhDaiDien ? (
-                <img src={doctor.anhDaiDien} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-              ) : (
-                initials
-              )}
-            </div>
+      <section className="member-panel member-doctor-profile">
+        <div className="member-doctor-profile__top">
+          <div className="member-doctor-profile__avatar">
+            {doctor.anhDaiDien ? <img src={doctor.anhDaiDien} alt="" /> : initials}
+          </div>
 
-            <div style={{ flex: 1 }}>
-              <h1 style={{ fontSize: "24px", fontWeight: "700", margin: "0 0 8px 0", color: "#1a202c" }}>
-                {doctor.hoTenDayDu}
-              </h1>
-              <span
-                style={{
-                  backgroundColor: "#ccfbf1",
-                  color: "#0f766e",
-                  padding: "4px 12px",
-                  borderRadius: "12px",
-                  fontSize: "14px",
-                  fontWeight: "600",
-                }}
-              >
-                {doctor.trinhDoChuyenMon}
-              </span>
-              <p style={{ margin: "12px 0 4px 0", color: "#4a5568", fontWeight: "500" }}>{doctor.chuyenKhoa}</p>
-              <p style={{ margin: 0, color: "#718096", fontSize: "14px" }}>{doctor.tenCoSoYTe}</p>
-              {doctor.diaChiLamViec ? (
-                <p style={{ margin: "8px 0 0", color: "#718096", fontSize: "13px" }}>{doctor.diaChiLamViec}</p>
-              ) : null}
+          <div className="member-doctor-profile__info">
+            <div className="member-doctor-profile__name">{doctor.hoTenDayDu}</div>
+            <div className="member-doctor-profile__meta">{doctor.chuyenKhoa}</div>
+            <div className="member-doctor-profile__meta">{doctor.tenCoSoYTe}</div>
+            <div className="member-doctor-profile__meta">{doctor.diaChiLamViec || "Chưa cập nhật địa chỉ"}</div>
 
-              <div
-                style={{
-                  marginTop: "16px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  color: "#10b981",
-                  fontWeight: "600",
-                  fontSize: "14px",
-                }}
-              >
-                <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "#10b981" }} />
-                Hồ sơ: {doctor.trangThaiHoSo}
-              </div>
+            <div className="member-doctor-profile__chips">
+              <span className="member-chip">{doctor.trinhDoChuyenMon}</span>
+              <span className="member-chip member-chip--soft">{doctor.trangThaiHoSo}</span>
+              <span className="member-chip member-chip--soft">CCHN: {doctor.maChungChiHanhNghe}</span>
             </div>
           </div>
         </div>
 
-        <div
-          style={{
-            backgroundColor: "#fff",
-            borderRadius: "16px",
-            padding: "20px",
-            marginBottom: "20px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-          }}
-        >
-          <div style={{ color: "#94a3b8", fontSize: "12px", marginBottom: 8 }}>Giới thiệu</div>
-          <p style={{ margin: 0, color: "#475569", lineHeight: 1.6, fontSize: 14 }}>
-            {doctor.moTaBanThan || "Chưa có mô tả chi tiết."}
-          </p>
-          <div style={{ marginTop: "20px", paddingTop: "20px", borderTop: "1px solid #f1f5f9", display: "flex", alignItems: "center", gap: "16px" }}>
-            <div
-              style={{
-                width: "40px",
-                height: "40px",
-                backgroundColor: "#f0fdfa",
-                borderRadius: "10px",
-                display: "grid",
-                placeItems: "center",
-              }}
-            >
-              📋
-            </div>
-            <div>
-              <div style={{ color: "#94a3b8", fontSize: "12px" }}>Số CCHN</div>
-              <div style={{ fontWeight: "600", color: "#475569" }}>{doctor.maChungChiHanhNghe}</div>
-            </div>
+        <div className="member-doctor-profile__rating">
+          <div className="member-panel__title">Đánh giá</div>
+          <div className="member-rating-box">
+            <strong>{rating?.soSaoTrungBinh?.toFixed?.(1) ?? "0.0"}</strong>
+            <span>{rating?.tongDanhGia ?? 0} lượt đánh giá</span>
           </div>
         </div>
 
-        <div style={{ height: "150px" }} />
-      </div>
-
-      <div
-        style={{
-          position: "fixed",
-          bottom: "20px",
-          left: 0,
-          right: 0,
-          zIndex: 1000,
-          display: "flex",
-          justifyContent: "center",
-          pointerEvents: "none",
-        }}
-      >
-        <div
-          style={{
-            width: "calc(100% - 40px)",
-            maxWidth: "600px",
-            backgroundColor: "rgba(255, 255, 255, 0.95)",
-            backdropFilter: "blur(10px)",
-            padding: "12px 20px",
-            borderRadius: "24px",
-            boxShadow: "0 10px 30px rgba(0,0,0,0.15)",
-            display: "flex",
-            gap: "12px",
-            alignItems: "center",
-            pointerEvents: "auto",
-          }}
-        >
-          <button
-            type="button"
-            onClick={() => navigate(`/app/messages/new`)}
-            style={{
-              width: "48px",
-              height: "48px",
-              borderRadius: "50%",
-              border: "none",
-              backgroundColor: "#f1f5f9",
-              fontSize: "20px",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            💬
-          </button>
-          <button
-            type="button"
-            onClick={() => navigate(`/app/doctors/${maBacSi}/slots`)}
-            style={{
-              flex: 1,
-              height: "48px",
-              borderRadius: "15px",
-              border: "none",
-              backgroundColor: "#f0fdfa",
-              color: "#0d9488",
-              fontWeight: "700",
-              fontSize: "15px",
-              cursor: "pointer",
-            }}
-          >
-            📅 Đặt lịch
-          </button>
-          <button
-            type="button"
-            onClick={() => navigate(`/app/doctors/${maBacSi}/slots`)}
-            style={{
-              flex: 1.5,
-              height: "48px",
-              borderRadius: "15px",
-              border: "none",
-              backgroundColor: "#0d9488",
-              color: "#fff",
-              fontWeight: "700",
-              fontSize: "15px",
-              cursor: "pointer",
-            }}
-          >
-            Khung giờ
-          </button>
+        <div className="member-doctor-profile__bio">
+          <div className="member-panel__title">Giới thiệu</div>
+          <p>{doctor.moTaBanThan || "Chưa có mô tả chi tiết."}</p>
         </div>
+
+        <div className="member-doctor-profile__reviews">
+          <div className="member-panel__title">Bình luận gần đây</div>
+          <div className="member-review-list">
+            {(reviewQuery.data || []).slice(0, 3).map((review) => (
+              <article key={review.maDanhGia} className="member-review-card">
+                <div className="member-review-card__head">
+                  <strong>{review.hoTenNguoiDung}</strong>
+                  <span>{review.soSao} sao</span>
+                </div>
+                <p>{review.noiDung || "Không có nội dung."}</p>
+              </article>
+            ))}
+            {reviewQuery.isLoading ? <div className="member-empty-state">Đang tải bình luận…</div> : null}
+            {!reviewQuery.isLoading && (reviewQuery.data || []).length === 0 ? (
+              <div className="member-empty-state">Chưa có bình luận cho bác sĩ này.</div>
+            ) : null}
+          </div>
+        </div>
+      </section>
+
+      <div className="member-sticky-actions">
+        <button type="button" onClick={() => navigate(`/app/messages`)} className="btn btn-ghost">Nhắn tin</button>
+        <button type="button" onClick={() => navigate(`/app/doctors/${maBacSi}/slots`)} className="btn btn-primary">Đặt lịch hẹn</button>
       </div>
     </main>
   );

@@ -32,28 +32,15 @@ import { RecentDoctorsPage } from "./pages/member/RecentDoctorsPage";
 import { SuggestedDoctorsPage } from "./pages/member/SuggestedDoctorsPage";
 import { WorkingSlotsPage } from "./pages/member/WorkingSlotsPage";
 import { CreateAppointmentPage } from "./pages/member/CreateAppointmentPage";
+import { DoctorSearchPage } from "./pages/member/DoctorSearchPage";
 
 function IndexRoute() {
   const { session } = useAuth();
-  // Nếu chưa có session (chưa bấm đăng nhập giả) thì ở lại Landing
   if (!session) return <LandingPage />;
-
   const role = (session.vaiTro || "").toUpperCase();
-  if (role === "BAC_SI")
-    return (
-      <Navigate
-        to={session.activePortal === "doctor" ? "/doctor/home" : "/app/home"}
-        replace
-      />
-    );
-  if (role === "ADMIN" || role === "QUAN_TRI_VIEN")
-    return <Navigate to="/admin/home" replace />;
-  return (
-    <Navigate
-      to={session.activePortal === "doctor" ? "/doctor/home" : "/app/home"}
-      replace
-    />
-  );
+  if (role === "BAC_SI") return <Navigate to={session.activePortal === "doctor" ? "/doctor/home" : "/app/home"} replace />;
+  if (role === "ADMIN" || role === "QUAN_TRI_VIEN") return <Navigate to="/admin/home" replace />;
+  return <Navigate to={session.activePortal === "doctor" ? "/doctor/home" : "/app/home"} replace />;
 }
 
 export default function App() {
@@ -64,33 +51,24 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/admin/login" element={<AdminLoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
-
-        {/* Cụm Route cho Member - Đã bỏ RequireAuth để bạn test UI sau khi Login */}
         <Route path="/app" element={<MemberLayout />}>
           <Route index element={<Navigate to="home" replace />} />
           <Route path="home" element={<HomePage />} />
+          <Route path="search" element={<DoctorSearchPage />} />
           <Route path="doctor-status" element={<DoctorStatusPage />} />
           <Route path="doctors/recent" element={<RecentDoctorsPage />} />
           <Route path="doctors/suggested" element={<SuggestedDoctorsPage />} />
           <Route path="doctors/:maBacSi" element={<DoctorDetailPage />} />
           <Route path="doctors/:maBacSi/slots" element={<WorkingSlotsPage />} />
-          <Route path="/app/appointments/new" element={<CreateAppointmentPage />} />
+          <Route path="appointments/new" element={<CreateAppointmentPage />} />
           <Route path="appointments" element={<AppointmentsPage />} />
-          <Route
-            path="appointments/new/known"
-            element={<ChooseKnownDoctorPage />}
-          />
-          <Route
-            path="appointments/:maPhieuDatLich"
-            element={<AppointmentDetailPage />}
-          />
+          <Route path="appointments/new/known" element={<ChooseKnownDoctorPage />} />
+          <Route path="appointments/:maPhieuDatLich" element={<AppointmentDetailPage />} />
           <Route path="follows" element={<FollowsPage />} />
           <Route path="messages" element={<MessagesPage />} />
           <Route path="messages/:maCuocHoiThoai" element={<ChatPage />} />
           <Route path="account" element={<AccountPage />} />
         </Route>
-
-        {/* Cụm Route cho Doctor - Tương tự cũng bỏ RequireAuth */}
         <Route path="/doctor" element={<DoctorLayout />}>
           <Route index element={<Navigate to="home" replace />} />
           <Route path="home" element={<DoctorHomePage />} />
@@ -102,8 +80,6 @@ export default function App() {
           <Route path="messages/:maCuocHoiThoai" element={<ChatPage />} />
           <Route path="account" element={<AccountPage />} />
         </Route>
-
-        {/* Cụm Route cho Admin */}
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<Navigate to="home" replace />} />
           <Route path="home" element={<AdminHomePage />} />
@@ -111,12 +87,8 @@ export default function App() {
           <Route path="reports" element={<AdminReportsPage />} />
           <Route path="doctors/:maBacSi" element={<AdminDoctorDetailPage />} />
           <Route path="accounts" element={<AdminAccountsPage />} />
-          <Route
-            path="accounts/:maTaiKhoan"
-            element={<AdminAccountDetailPage />}
-          />
+          <Route path="accounts/:maTaiKhoan" element={<AdminAccountDetailPage />} />
         </Route>
-
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
