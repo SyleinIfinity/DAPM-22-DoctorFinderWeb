@@ -12,6 +12,7 @@ import { AdminHomePage } from "./pages/admin/AdminHomePage";
 import { AdminReportsPage } from "./pages/admin/AdminReportsPage";
 import { DoctorDocumentsPage } from "./pages/doctor/DoctorDocumentsPage";
 import { DoctorHomePage } from "./pages/doctor/DoctorHomePage";
+import { DoctorProfileUpdatePage } from "./pages/doctor/DoctorProfileUpdatePage";
 import { DoctorRequestsPage } from "./pages/doctor/DoctorRequestsPage";
 import { DoctorSchedulePage } from "./pages/doctor/DoctorSchedulePage";
 import { DoctorWorkspacePage } from "./pages/doctor/DoctorWorkspacePage";
@@ -25,7 +26,7 @@ import { ChooseKnownDoctorPage } from "./pages/member/ChooseKnownDoctorPage";
 import { DoctorStatusPage } from "./pages/member/DoctorStatusPage";
 import { DoctorDetailPage } from "./pages/member/DoctorDetailPage";
 import { FollowsPage } from "./pages/member/FollowsPage";
-import HomePage from './pages/member/HomePage';
+import HomePage from "./pages/member/HomePage";
 import { ChatPage } from "./pages/member/ChatPage";
 import { MessagesPage } from "./pages/member/MessagesPage";
 import { RecentDoctorsPage } from "./pages/member/RecentDoctorsPage";
@@ -38,9 +39,21 @@ function IndexRoute() {
   const { session } = useAuth();
   if (!session) return <LandingPage />;
   const role = (session.vaiTro || "").toUpperCase();
-  if (role === "BAC_SI") return <Navigate to={session.activePortal === "doctor" ? "/doctor/home" : "/app/home"} replace />;
-  if (role === "ADMIN" || role === "QUAN_TRI_VIEN") return <Navigate to="/admin/home" replace />;
-  return <Navigate to={session.activePortal === "doctor" ? "/doctor/home" : "/app/home"} replace />;
+  if (role === "BAC_SI")
+    return (
+      <Navigate
+        to={session.activePortal === "doctor" ? "/doctor/home" : "/app/home"}
+        replace
+      />
+    );
+  if (role === "ADMIN" || role === "QUAN_TRI_VIEN")
+    return <Navigate to="/admin/home" replace />;
+  return (
+    <Navigate
+      to={session.activePortal === "doctor" ? "/doctor/home" : "/app/home"}
+      replace
+    />
+  );
 }
 
 export default function App() {
@@ -62,8 +75,14 @@ export default function App() {
           <Route path="doctors/:maBacSi/slots" element={<WorkingSlotsPage />} />
           <Route path="appointments/new" element={<CreateAppointmentPage />} />
           <Route path="appointments" element={<AppointmentsPage />} />
-          <Route path="appointments/new/known" element={<ChooseKnownDoctorPage />} />
-          <Route path="appointments/:maPhieuDatLich" element={<AppointmentDetailPage />} />
+          <Route
+            path="appointments/new/known"
+            element={<ChooseKnownDoctorPage />}
+          />
+          <Route
+            path="appointments/:maPhieuDatLich"
+            element={<AppointmentDetailPage />}
+          />
           <Route path="follows" element={<FollowsPage />} />
           <Route path="messages" element={<MessagesPage />} />
           <Route path="messages/:maCuocHoiThoai" element={<ChatPage />} />
@@ -73,6 +92,7 @@ export default function App() {
           <Route index element={<Navigate to="home" replace />} />
           <Route path="home" element={<DoctorHomePage />} />
           <Route path="workspace" element={<DoctorWorkspacePage />} />
+          <Route path="account/update" element={<DoctorProfileUpdatePage />} />
           <Route path="requests" element={<DoctorRequestsPage />} />
           <Route path="schedule" element={<DoctorSchedulePage />} />
           <Route path="documents" element={<DoctorDocumentsPage />} />
@@ -87,7 +107,10 @@ export default function App() {
           <Route path="reports" element={<AdminReportsPage />} />
           <Route path="doctors/:maBacSi" element={<AdminDoctorDetailPage />} />
           <Route path="accounts" element={<AdminAccountsPage />} />
-          <Route path="accounts/:maTaiKhoan" element={<AdminAccountDetailPage />} />
+          <Route
+            path="accounts/:maTaiKhoan"
+            element={<AdminAccountDetailPage />}
+          />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
