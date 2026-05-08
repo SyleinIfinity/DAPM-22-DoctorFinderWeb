@@ -1,8 +1,8 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../api/http";
-import type { AccountDoctorInfo } from "../../api/types";
+import type { AccountDoctorInfo, UpgradeToDoctorResponse } from "../../api/types";
 import { useAuth } from "../../auth/AuthContext";
 import { getApiErrorMessage } from "../../utils/errors";
 import {
@@ -44,6 +44,11 @@ const specialtyOptions = [
 ];
 
 type DoctorApiEnvelope = { data?: AccountDoctorInfo | null } | null;
+type NoticeState = {
+  tone: "success" | "danger" | "warning" | "info";
+  title: string;
+  description: string;
+} | null;
 
 function createDocUpload(): DocUpload {
   return { id: Date.now(), title: "", file: null };
@@ -83,6 +88,7 @@ function getActivityStatusMeta(status: string | null | undefined) {
 }
 
 export function DoctorStatusPage() {
+  const qc = useQueryClient();
   const { session } = useAuth();
   const maTaiKhoan = session?.maTaiKhoan ?? null;
 
@@ -90,6 +96,7 @@ export function DoctorStatusPage() {
   const [isRegistering, setIsRegistering] = useState(false);
   const [doctorForm, setDoctorForm] = useState<DoctorFormState>(getInitialDoctorForm(null));
   const [docs, setDocs] = useState<DocUpload[]>(() => [createDocUpload()]);
+  const [notice, setNotice] = useState<NoticeState>(null);
 
   const query = useQuery({
     queryKey: ["doctor-status", maTaiKhoan],
@@ -126,6 +133,67 @@ export function DoctorStatusPage() {
     if (docs.length > 1) setDocs(docs.filter((d) => d.id !== id));
   };
 
+  const submitUpgrade = useMutation({
+    mutationFn: async () => {
+      if (!maTaiKhoan) throw new Error("Thiếu mã tài khoản");
+      if (!doctorForm.chuyenKhoa.trim()) throw new Error("Vui lòng chọn chuyên khoa");
+      if (!doctorForm.trinhDoChuyenMon.trim()) throw new Error("Vui lòng nhập trình độ chuyên môn");
+      if (!doctorForm.loaiHinhBacSi.trim()) throw new Error("Vui lòng nhập loại hình bác sĩ");
+      if (!doctorForm.tenCoSoYTe.trim()) throw new Error("Vui lòng nhập tên cơ sở y tế");
+      if (!doctorForm.maChungChiHanhNghe.trim()) throw new Error("Vui lòng nhập mã chứng chỉ hành nghề");
+
+      const formData = new FormData();
+      formData.append("maTaiKhoan", String(maTaiKhoan));
+
+      const doctorPayload = {
+        chuyenKhoa: doctorForm.chuyenKhoa.trim(),
+        trinhDoChuyenMon: doctorForm.trinhDoChuyenMon.trim(),
+        loaiHinhBacSi: doctorForm.loaiHinhBacSi.trim(),
+        tenCoSoYTe: doctorForm.tenCoSoYTe.trim(),
+        diaChiLamViec: doctorForm.diaChiLamViec.trim() || null,
+        maChungChiHanhNghe: doctorForm.maChungChiHanhNghe.trim(),
+        moTaBanThan: doctorForm.moTaBanThan.trim() || null,
+      };
+      formData.append(
+        "thongTinBacSi",
+        new Blob([JSON.stringify(doctorPayload)], { type: "application/json" }),
+      );
+
+      const validDocs = docs.filter((doc) => doc.file);
+      for (const doc of validDocs) {
+        const fallbackTitle = doc.file?.name ?? "Tai lieu minh chung";
+        formData.append("tieuDeTaiLieu", doc.title.trim() || fallbackTitle);
+        formData.append("files", doc.file as File);
+      }
+
+      const response = await api.post<UpgradeToDoctorResponse>(
+        "/api/auth/upgrade-to-doctor",
+        formData,
+        { headers: { "Content-Type": "multipart/form-data" } },
+      );
+      return response.data;
+    },
+    onSuccess: async (response) => {
+      setNotice({
+        tone: response.upgraded ? "success" : "warning",
+        title: response.upgraded ? "Đã gửi hồ sơ bác sĩ" : "Không thể gửi hồ sơ",
+        description: response.message,
+      });
+      if (response.upgraded) {
+        setIsRegistering(false);
+        setDocs([createDocUpload()]);
+      }
+      await qc.invalidateQueries({ queryKey: ["doctor-status", maTaiKhoan] });
+    },
+    onError: (error) => {
+      setNotice({
+        tone: "danger",
+        title: "Gửi hồ sơ thất bại",
+        description: getApiErrorMessage(error),
+      });
+    },
+  });
+
   return (
     <div className="doctor-page">
       <DoctorPageHeading
@@ -145,6 +213,7 @@ export function DoctorStatusPage() {
 
       {query.isLoading ? <DoctorNotice tone="info" title="Đang tải thông tin" description="Hệ thống đang lấy dữ liệu..." /> : null}
       {query.isError ? <DoctorNotice tone="danger" title="Không tải được dữ liệu" description={errorMessage ?? "Có lỗi xảy ra khi truy xuất hồ sơ bác sĩ."} /> : null}
+      {notice ? <DoctorNotice tone={notice.tone} title={notice.title} description={notice.description} /> : null}
       {!maTaiKhoan ? <DoctorNotice tone="warning" title="Chưa đăng nhập" description="Vui lòng đăng nhập để xem trạng thái hồ sơ bác sĩ." /> : null}
       {!query.isLoading && !query.isError && !rawData ? (
         <DoctorNotice
@@ -300,6 +369,14 @@ export function DoctorStatusPage() {
                       <input
                         type="text"
                         placeholder="Tiêu đề minh chứng"
+                        value={d.title}
+                        onChange={(e) =>
+                          setDocs((prev) =>
+                            prev.map((item) =>
+                              item.id === d.id ? { ...item, title: e.target.value } : item,
+                            ),
+                          )
+                        }
                         style={{
                           flex: 1,
                           padding: "8px",
@@ -307,7 +384,19 @@ export function DoctorStatusPage() {
                           border: "1px solid #E5E7EB",
                         }}
                       />
-                      <input type="file" style={{ flex: 1 }} />
+                      <input
+                        type="file"
+                        style={{ flex: 1 }}
+                        onChange={(e) =>
+                          setDocs((prev) =>
+                            prev.map((item) =>
+                              item.id === d.id
+                                ? { ...item, file: e.target.files?.[0] ?? null }
+                                : item,
+                            ),
+                          )
+                        }
+                      />
                       <button
                         onClick={() => removeDocRow(d.id)}
                         style={{
@@ -333,9 +422,14 @@ export function DoctorStatusPage() {
                   <button 
                     className="doctor-button doctor-button--primary" 
                     style={{ flex: 1, color: '#000', fontWeight: 'bold' }}
-                    onClick={() => { alert(hasDoctorAccount ? "Cập nhật hồ sơ thành công!" : "Gửi duyệt hồ sơ thành công!"); setIsRegistering(false); }}
+                    disabled={submitUpgrade.isPending}
+                    onClick={() => submitUpgrade.mutate()}
                   >
-                    {hasDoctorAccount ? "Cập nhật hồ sơ" : "Gửi hồ sơ duyệt"}
+                    {submitUpgrade.isPending
+                      ? "Đang gửi..."
+                      : hasDoctorAccount
+                      ? "Cập nhật hồ sơ"
+                      : "Gửi hồ sơ duyệt"}
                   </button>
                 </div>
               </DoctorPanel>
