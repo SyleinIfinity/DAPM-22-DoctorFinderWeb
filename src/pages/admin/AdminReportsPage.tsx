@@ -1,12 +1,14 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import * as XLSX from 'xlsx'
 import { api } from '../../api/http'
 import type { AdminDoctorProfileTrafficReport, AdminReportDoctorRank, AdminReportKeyword } from '../../api/types'
 import { getApiErrorMessage } from '../../utils/errors'
 import { DoctorNotice, DoctorPageHeading, DoctorPanel, DoctorStatCard } from '../doctor/doctorUi'
 
 const PIE_COLORS = ['#0d9488', '#f59e0b', '#6366f1', '#ec4899', '#22c55e', '#94a3b8', '#8b5cf6', '#14b8a6']
-type ExportKind = 'overview-csv' | 'top-view-csv' | 'top-follow-csv' | 'keywords-csv' | 'full-json'
+type ExportKind = 'overview' | 'top-view' | 'top-follow' | 'keywords' | 'full-json'
+type ExportFormat = 'csv' | 'pdf' | 'xlsx'
 
 function toCsv(headers: string[], rows: Array<Array<string | number>>) {
   const escape = (value: string | number) => `"${String(value).replace(/"/g, '""')}"`
@@ -81,8 +83,9 @@ export function AdminReportsPage() {
   const { from: defaultFrom, to: defaultTo } = useMemo(() => defaultRange(), [])
   const [from, setFrom] = useState(defaultFrom)
   const [to, setTo] = useState(defaultTo)
-  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false)
-  const [previewKind, setPreviewKind] = useState<ExportKind | null>(null)
+  const [isExportDialogOpen, setIsExportDialogOpen] = useState(false)
+  const [previewKind, setPreviewKind] = useState<ExportKind>('overview')
+  const [exportFormat, setExportFormat] = useState<ExportFormat>('csv')
 
   const params = useMemo(() => {
     const normalize = (s: string) => (s.length === 16 ? `${s}:00` : s)
@@ -123,37 +126,37 @@ export function AdminReportsPage() {
     const fromDate = params.from.slice(0, 10)
     const toDate = params.to.slice(0, 10)
 
-    if (previewKind === 'overview-csv') {
+    if (previewKind === 'overview') {
       return {
         title: 'Xem trước: Tổng quan báo cáo',
-        fileName: `admin-overview-${fromDate}-to-${toDate}.csv`,
+        baseName: `admin-overview-${fromDate}-to-${toDate}`,
         headers: ['from', 'to', 'totalViews', 'topViewedDoctor', 'topViewedPercent'],
         rows: [[params.from, params.to, totalViews, trafficTopLabel, trafficTopPercent]],
       }
     }
 
-    if (previewKind === 'top-view-csv') {
+    if (previewKind === 'top-view') {
       return {
         title: 'Xem trước: Top bác sĩ được xem',
-        fileName: `admin-top-view-${fromDate}-to-${toDate}.csv`,
+        baseName: `admin-top-view-${fromDate}-to-${toDate}`,
         headers: ['rank', 'maBacSi', 'hoTenDayDu', 'count'],
         rows: (topViewQuery.data || []).map((r) => [r.rank, r.maBacSi, r.hoTenDayDu, r.count]),
       }
     }
 
-    if (previewKind === 'top-follow-csv') {
+    if (previewKind === 'top-follow') {
       return {
         title: 'Xem trước: Top bác sĩ được follow',
-        fileName: `admin-top-follow-${fromDate}-to-${toDate}.csv`,
+        baseName: `admin-top-follow-${fromDate}-to-${toDate}`,
         headers: ['rank', 'maBacSi', 'hoTenDayDu', 'count'],
         rows: (topFollowQuery.data || []).map((r) => [r.rank, r.maBacSi, r.hoTenDayDu, r.count]),
       }
     }
 
-    if (previewKind === 'keywords-csv') {
+    if (previewKind === 'keywords') {
       return {
         title: 'Xem trước: Từ khóa phổ biến',
-        fileName: `admin-top-keywords-${fromDate}-to-${toDate}.csv`,
+        baseName: `admin-top-keywords-${fromDate}-to-${toDate}`,
         headers: ['rank', 'keyword', 'count'],
         rows: (keywordsQuery.data || []).map((k) => [k.rank, k.keyword, k.count]),
       }
@@ -172,7 +175,7 @@ export function AdminReportsPage() {
       }
       return {
         title: 'Xem trước: Full JSON',
-        fileName: `admin-reports-${fromDate}-to-${toDate}.json`,
+        baseName: `admin-reports-${fromDate}-to-${toDate}`,
         json: JSON.stringify(payload, null, 2),
       }
     }
@@ -183,11 +186,58 @@ export function AdminReportsPage() {
   const downloadPreview = () => {
     if (!previewMeta) return
     if ('json' in previewMeta && typeof previewMeta.json === 'string') {
-      triggerDownload(previewMeta.json, previewMeta.fileName, 'application/json')
+      if (exportFormat === 'pdf') {
+        const printWindow = window.open('', '_blank')
+        if (!printWindow) return
+        printWindow.document.write(`<html><head><title>${previewMeta.baseName}.pdf</title></head><body><pre>${previewMeta.json.replaceAll('<', '&lt;')}</pre></body></html>`)
+        printWindow.document.close()
+        printWindow.focus()
+        setTimeout(() => printWindow.print(), 200)
+        return
+      }
+      if (exportFormat === 'xlsx') {
+        const worksheet = XLSX.utils.aoa_to_sheet([['json'], [previewMeta.json]])
+        const workbook = XLSX.utils.book_new()
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Report')
+        XLSX.writeFile(workbook, `${previewMeta.baseName}.xlsx`)
+        return
+      }
+      triggerDownload(previewMeta.json, `${previewMeta.baseName}.json`, 'application/json')
+      return
+    }
+    if (exportFormat === 'xlsx') {
+      const worksheet = XLSX.utils.aoa_to_sheet([previewMeta.headers, ...previewMeta.rows])
+      const workbook = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Report')
+      XLSX.writeFile(workbook, `${previewMeta.baseName}.xlsx`)
+      return
+    }
+    if (exportFormat === 'pdf') {
+      const printWindow = window.open('', '_blank')
+      if (!printWindow) return
+      const rowsHtml = previewMeta.rows
+        .map((row) => `<tr>${row.map((cell) => `<td style="border:1px solid #ccc;padding:6px">${String(cell)}</td>`).join('')}</tr>`)
+        .join('')
+      const headerHtml = previewMeta.headers.map((header) => `<th style="border:1px solid #ccc;padding:6px;text-align:left">${header}</th>`).join('')
+      printWindow.document.write(`
+        <html>
+          <head><title>${previewMeta.baseName}.pdf</title></head>
+          <body>
+            <h2>${previewMeta.title}</h2>
+            <table style="border-collapse:collapse;width:100%">
+              <thead><tr>${headerHtml}</tr></thead>
+              <tbody>${rowsHtml}</tbody>
+            </table>
+          </body>
+        </html>
+      `)
+      printWindow.document.close()
+      printWindow.focus()
+      setTimeout(() => printWindow.print(), 200)
       return
     }
     const csv = toCsv(previewMeta.headers, previewMeta.rows)
-    triggerDownload(csv, previewMeta.fileName, 'text/csv;charset=utf-8')
+    triggerDownload(csv, `${previewMeta.baseName}.csv`, 'text/csv;charset=utf-8')
   }
 
   return (
@@ -197,133 +247,144 @@ export function AdminReportsPage() {
         title="Báo cáo thống kê"
         description="Theo dõi tần suất xem hồ sơ, lượt follow và từ khóa tìm kiếm theo khoảng thời gian tùy chọn."
         actions={
-          <div style={{ position: 'relative' }}>
-            <button
-              type="button"
-              className="doctor-button doctor-button--secondary"
-              onClick={() => setIsExportMenuOpen((prev) => !prev)}
-            >
-              Xuất file
-            </button>
-            {isExportMenuOpen ? (
-              <div
-                style={{
-                  position: 'absolute',
-                  right: 0,
-                  top: 44,
-                  zIndex: 10,
-                  minWidth: 220,
-                  background: '#fff',
-                  border: '1px solid rgba(15,23,42,0.12)',
-                  borderRadius: 12,
-                  boxShadow: '0 12px 30px rgba(15,23,42,0.16)',
-                  padding: 8,
-                  display: 'grid',
-                  gap: 6,
-                }}
-              >
-                {[
-                  ['overview-csv', 'CSV: Tổng quan'],
-                  ['top-view-csv', 'CSV: Top bác sĩ xem'],
-                  ['top-follow-csv', 'CSV: Top bác sĩ follow'],
-                  ['keywords-csv', 'CSV: Top từ khóa'],
-                  ['full-json', 'JSON: Full báo cáo'],
-                ].map(([kind, label]) => (
-                  <button
-                    key={kind}
-                    type="button"
-                    className="doctor-button doctor-button--secondary"
-                    style={{ justifyContent: 'flex-start' }}
-                    onClick={() => {
-                      setPreviewKind(kind as ExportKind)
-                      setIsExportMenuOpen(false)
-                    }}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            ) : null}
-          </div>
+          <button
+            type="button"
+            className="doctor-button doctor-button--secondary"
+            onClick={() => setIsExportDialogOpen(true)}
+          >
+            Xuất file
+          </button>
         }
       />
 
-      {previewMeta ? (
-        <DoctorPanel
-          title={previewMeta.title}
-          description="Kiểm tra nhanh dữ liệu trước khi tải file."
-          aside={
-            <div className="doctor-button-row">
-              <button
-                type="button"
-                className="doctor-button doctor-button--secondary"
-                onClick={() => setPreviewKind(null)}
-              >
-                Đóng xem trước
-              </button>
-              <button
-                type="button"
-                className="doctor-button doctor-button--primary"
-                onClick={downloadPreview}
-              >
-                Tải file này
-              </button>
-            </div>
-          }
+      {isExportDialogOpen && previewMeta ? (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 9999,
+            background: 'rgba(15, 23, 42, 0.45)',
+            display: 'grid',
+            placeItems: 'center',
+            padding: 20,
+          }}
         >
-          {'json' in previewMeta ? (
-            <pre
-              style={{
-                margin: 0,
-                maxHeight: 280,
-                overflow: 'auto',
-                fontSize: 12,
-                background: '#0f172a',
-                color: '#e2e8f0',
-                padding: 12,
-                borderRadius: 10,
-              }}
-            >
-              {previewMeta.json}
-            </pre>
-          ) : (
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                <thead>
-                  <tr>
-                    {previewMeta.headers.map((header) => (
-                      <th
-                        key={header}
-                        style={{ textAlign: 'left', borderBottom: '1px solid #e2e8f0', padding: '8px 6px' }}
-                      >
-                        {header}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {previewMeta.rows.length === 0 ? (
-                    <tr>
-                      <td colSpan={previewMeta.headers.length} style={{ padding: '10px 6px', color: '#64748b' }}>
-                        Chưa có dữ liệu trong khoảng thời gian đã chọn.
-                      </td>
-                    </tr>
-                  ) : (
-                    previewMeta.rows.slice(0, 12).map((row, rowIndex) => (
-                      <tr key={rowIndex}>
-                        {row.map((cell, cellIndex) => (
-                          <td key={`${rowIndex}-${cellIndex}`} style={{ borderBottom: '1px solid #f1f5f9', padding: '8px 6px' }}>
-                            {String(cell)}
-                          </td>
-                        ))}
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+          <div
+            style={{
+              width: 'min(1080px, 96vw)',
+              maxHeight: '92vh',
+              overflow: 'auto',
+              background: '#ffffff',
+              borderRadius: 14,
+              padding: 18,
+              boxShadow: '0 24px 60px rgba(15,23,42,0.28)',
+            }}
+          >
+            <div className="doctor-inline-between" style={{ marginBottom: 14 }}>
+              <h3 style={{ margin: 0 }}>{previewMeta.title}</h3>
+              <div className="doctor-button-row">
+                <button
+                  type="button"
+                  className="doctor-button doctor-button--secondary"
+                  onClick={() => setIsExportDialogOpen(false)}
+                >
+                  Đóng
+                </button>
+                <button
+                  type="button"
+                  className="doctor-button doctor-button--primary"
+                  onClick={downloadPreview}
+                >
+                  Xuất ngay
+                </button>
+              </div>
             </div>
-          )}
-        </DoctorPanel>
+
+            <div className="doctor-form-grid doctor-form-grid--compact" style={{ marginBottom: 12 }}>
+              <div className="doctor-field">
+                <label className="doctor-label" htmlFor="export-content">Nội dung xuất</label>
+                <select
+                  id="export-content"
+                  className="doctor-input"
+                  value={previewKind}
+                  onChange={(e) => setPreviewKind(e.target.value as ExportKind)}
+                >
+                  <option value="overview">Tổng quan</option>
+                  <option value="top-view">Top bác sĩ được xem</option>
+                  <option value="top-follow">Top bác sĩ được follow</option>
+                  <option value="keywords">Top từ khóa</option>
+                  <option value="full-json">Full báo cáo</option>
+                </select>
+              </div>
+              <div className="doctor-field">
+                <label className="doctor-label" htmlFor="export-format">Định dạng file</label>
+                <select
+                  id="export-format"
+                  className="doctor-input"
+                  value={exportFormat}
+                  onChange={(e) => setExportFormat(e.target.value as ExportFormat)}
+                >
+                  <option value="csv">.csv</option>
+                  <option value="pdf">.pdf (mở print preview)</option>
+                  <option value="xlsx">.xlsx</option>
+                </select>
+              </div>
+            </div>
+
+            {'json' in previewMeta ? (
+              <pre
+                style={{
+                  margin: 0,
+                  maxHeight: 420,
+                  overflow: 'auto',
+                  fontSize: 12,
+                  background: '#0f172a',
+                  color: '#e2e8f0',
+                  padding: 12,
+                  borderRadius: 10,
+                }}
+              >
+                {previewMeta.json}
+              </pre>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead>
+                    <tr>
+                      {previewMeta.headers.map((header) => (
+                        <th
+                          key={header}
+                          style={{ textAlign: 'left', borderBottom: '1px solid #e2e8f0', padding: '8px 6px' }}
+                        >
+                          {header}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {previewMeta.rows.length === 0 ? (
+                      <tr>
+                        <td colSpan={previewMeta.headers.length} style={{ padding: '10px 6px', color: '#64748b' }}>
+                          Chưa có dữ liệu trong khoảng thời gian đã chọn.
+                        </td>
+                      </tr>
+                    ) : (
+                      previewMeta.rows.map((row, rowIndex) => (
+                        <tr key={rowIndex}>
+                          {row.map((cell, cellIndex) => (
+                            <td key={`${rowIndex}-${cellIndex}`} style={{ borderBottom: '1px solid #f1f5f9', padding: '8px 6px' }}>
+                              {String(cell)}
+                            </td>
+                          ))}
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
       ) : null}
 
       <DoctorPanel
