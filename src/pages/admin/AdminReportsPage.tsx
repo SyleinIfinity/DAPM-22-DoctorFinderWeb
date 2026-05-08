@@ -6,6 +6,23 @@ import { getApiErrorMessage } from '../../utils/errors'
 import { DoctorNotice, DoctorPageHeading, DoctorPanel, DoctorStatCard } from '../doctor/doctorUi'
 
 const PIE_COLORS = ['#0d9488', '#f59e0b', '#6366f1', '#ec4899', '#22c55e', '#94a3b8', '#8b5cf6', '#14b8a6']
+type ExportKind = 'overview-csv' | 'top-view-csv' | 'top-follow-csv' | 'keywords-csv' | 'full-json'
+
+function toCsv(headers: string[], rows: Array<Array<string | number>>) {
+  const escape = (value: string | number) => `"${String(value).replace(/"/g, '""')}"`
+  const lines = [headers.map(escape).join(','), ...rows.map((row) => row.map(escape).join(','))]
+  return lines.join('\n')
+}
+
+function triggerDownload(content: string, fileName: string, mimeType: string) {
+  const blob = new Blob([content], { type: mimeType })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = fileName
+  a.click()
+  URL.revokeObjectURL(url)
+}
 
 function PieChart({ slices }: { slices: { label: string; percent: number; color: string }[] }) {
   if (slices.length === 0) {
@@ -64,6 +81,8 @@ export function AdminReportsPage() {
   const { from: defaultFrom, to: defaultTo } = useMemo(() => defaultRange(), [])
   const [from, setFrom] = useState(defaultFrom)
   const [to, setTo] = useState(defaultTo)
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false)
+  const [previewKind, setPreviewKind] = useState<ExportKind | null>(null)
 
   const params = useMemo(() => {
     const normalize = (s: string) => (s.length === 16 ? `${s}:00` : s)
@@ -100,6 +119,77 @@ export function AdminReportsPage() {
   const trafficTopLabel = trafficQuery.data?.slices?.[0]?.label ?? 'Chưa có dữ liệu'
   const trafficTopPercent = trafficQuery.data?.slices?.[0]?.percent ?? 0
 
+  const previewMeta = useMemo(() => {
+    const fromDate = params.from.slice(0, 10)
+    const toDate = params.to.slice(0, 10)
+
+    if (previewKind === 'overview-csv') {
+      return {
+        title: 'Xem trước: Tổng quan báo cáo',
+        fileName: `admin-overview-${fromDate}-to-${toDate}.csv`,
+        headers: ['from', 'to', 'totalViews', 'topViewedDoctor', 'topViewedPercent'],
+        rows: [[params.from, params.to, totalViews, trafficTopLabel, trafficTopPercent]],
+      }
+    }
+
+    if (previewKind === 'top-view-csv') {
+      return {
+        title: 'Xem trước: Top bác sĩ được xem',
+        fileName: `admin-top-view-${fromDate}-to-${toDate}.csv`,
+        headers: ['rank', 'maBacSi', 'hoTenDayDu', 'count'],
+        rows: (topViewQuery.data || []).map((r) => [r.rank, r.maBacSi, r.hoTenDayDu, r.count]),
+      }
+    }
+
+    if (previewKind === 'top-follow-csv') {
+      return {
+        title: 'Xem trước: Top bác sĩ được follow',
+        fileName: `admin-top-follow-${fromDate}-to-${toDate}.csv`,
+        headers: ['rank', 'maBacSi', 'hoTenDayDu', 'count'],
+        rows: (topFollowQuery.data || []).map((r) => [r.rank, r.maBacSi, r.hoTenDayDu, r.count]),
+      }
+    }
+
+    if (previewKind === 'keywords-csv') {
+      return {
+        title: 'Xem trước: Từ khóa phổ biến',
+        fileName: `admin-top-keywords-${fromDate}-to-${toDate}.csv`,
+        headers: ['rank', 'keyword', 'count'],
+        rows: (keywordsQuery.data || []).map((k) => [k.rank, k.keyword, k.count]),
+      }
+    }
+
+    if (previewKind === 'full-json') {
+      const payload = {
+        from: params.from,
+        to: params.to,
+        totalViews,
+        topViewedDoctor: trafficTopLabel,
+        topViewedPercent: trafficTopPercent,
+        topViewRanks: topViewQuery.data || [],
+        topFollowRanks: topFollowQuery.data || [],
+        keywords: keywordsQuery.data || [],
+      }
+      return {
+        title: 'Xem trước: Full JSON',
+        fileName: `admin-reports-${fromDate}-to-${toDate}.json`,
+        json: JSON.stringify(payload, null, 2),
+      }
+    }
+
+    return null
+  }, [previewKind, params.from, params.to, totalViews, trafficTopLabel, trafficTopPercent, topViewQuery.data, topFollowQuery.data, keywordsQuery.data])
+
+  const downloadPreview = () => {
+    if (!previewMeta) return
+    if ('json' in previewMeta && typeof previewMeta.json === 'string') {
+      triggerDownload(previewMeta.json, previewMeta.fileName, 'application/json')
+      return
+    }
+    const csv = toCsv(previewMeta.headers, previewMeta.rows)
+    triggerDownload(csv, previewMeta.fileName, 'text/csv;charset=utf-8')
+  }
+
   return (
     <div className="doctor-page">
       <DoctorPageHeading
@@ -107,33 +197,134 @@ export function AdminReportsPage() {
         title="Báo cáo thống kê"
         description="Theo dõi tần suất xem hồ sơ, lượt follow và từ khóa tìm kiếm theo khoảng thời gian tùy chọn."
         actions={
-          <button
-            type="button"
-            className="doctor-button doctor-button--secondary"
-            onClick={() => {
-              const payload = {
-                from: params.from,
-                to: params.to,
-                totalViews,
-                topViewedDoctor: trafficTopLabel,
-                topViewedPercent: trafficTopPercent,
-                topViewRanks: topViewQuery.data || [],
-                topFollowRanks: topFollowQuery.data || [],
-                keywords: keywordsQuery.data || [],
-              }
-              const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
-              const url = URL.createObjectURL(blob)
-              const a = document.createElement('a')
-              a.href = url
-              a.download = `admin-reports-${params.from.slice(0, 10)}-to-${params.to.slice(0, 10)}.json`
-              a.click()
-              URL.revokeObjectURL(url)
-            }}
-          >
-            Xuất file
-          </button>
+          <div style={{ position: 'relative' }}>
+            <button
+              type="button"
+              className="doctor-button doctor-button--secondary"
+              onClick={() => setIsExportMenuOpen((prev) => !prev)}
+            >
+              Xuất file
+            </button>
+            {isExportMenuOpen ? (
+              <div
+                style={{
+                  position: 'absolute',
+                  right: 0,
+                  top: 44,
+                  zIndex: 10,
+                  minWidth: 220,
+                  background: '#fff',
+                  border: '1px solid rgba(15,23,42,0.12)',
+                  borderRadius: 12,
+                  boxShadow: '0 12px 30px rgba(15,23,42,0.16)',
+                  padding: 8,
+                  display: 'grid',
+                  gap: 6,
+                }}
+              >
+                {[
+                  ['overview-csv', 'CSV: Tổng quan'],
+                  ['top-view-csv', 'CSV: Top bác sĩ xem'],
+                  ['top-follow-csv', 'CSV: Top bác sĩ follow'],
+                  ['keywords-csv', 'CSV: Top từ khóa'],
+                  ['full-json', 'JSON: Full báo cáo'],
+                ].map(([kind, label]) => (
+                  <button
+                    key={kind}
+                    type="button"
+                    className="doctor-button doctor-button--secondary"
+                    style={{ justifyContent: 'flex-start' }}
+                    onClick={() => {
+                      setPreviewKind(kind as ExportKind)
+                      setIsExportMenuOpen(false)
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
         }
       />
+
+      {previewMeta ? (
+        <DoctorPanel
+          title={previewMeta.title}
+          description="Kiểm tra nhanh dữ liệu trước khi tải file."
+          aside={
+            <div className="doctor-button-row">
+              <button
+                type="button"
+                className="doctor-button doctor-button--secondary"
+                onClick={() => setPreviewKind(null)}
+              >
+                Đóng xem trước
+              </button>
+              <button
+                type="button"
+                className="doctor-button doctor-button--primary"
+                onClick={downloadPreview}
+              >
+                Tải file này
+              </button>
+            </div>
+          }
+        >
+          {'json' in previewMeta ? (
+            <pre
+              style={{
+                margin: 0,
+                maxHeight: 280,
+                overflow: 'auto',
+                fontSize: 12,
+                background: '#0f172a',
+                color: '#e2e8f0',
+                padding: 12,
+                borderRadius: 10,
+              }}
+            >
+              {previewMeta.json}
+            </pre>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr>
+                    {previewMeta.headers.map((header) => (
+                      <th
+                        key={header}
+                        style={{ textAlign: 'left', borderBottom: '1px solid #e2e8f0', padding: '8px 6px' }}
+                      >
+                        {header}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {previewMeta.rows.length === 0 ? (
+                    <tr>
+                      <td colSpan={previewMeta.headers.length} style={{ padding: '10px 6px', color: '#64748b' }}>
+                        Chưa có dữ liệu trong khoảng thời gian đã chọn.
+                      </td>
+                    </tr>
+                  ) : (
+                    previewMeta.rows.slice(0, 12).map((row, rowIndex) => (
+                      <tr key={rowIndex}>
+                        {row.map((cell, cellIndex) => (
+                          <td key={`${rowIndex}-${cellIndex}`} style={{ borderBottom: '1px solid #f1f5f9', padding: '8px 6px' }}>
+                            {String(cell)}
+                          </td>
+                        ))}
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </DoctorPanel>
+      ) : null}
 
       <DoctorPanel
         title="Thống kê tổng quan"
