@@ -1,148 +1,100 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { api } from '../../api/http'
 import type { AppointmentSummary } from '../../api/types'
 import { useAuth } from '../../auth/AuthContext'
 import { PageHeader } from '../../components/PageHeader'
+import { api } from '../../api/http'
 import { getApiErrorMessage } from '../../utils/errors'
 
 type Scope = 'upcoming' | 'history'
 
-function normalizeTime(value: string): string {
-  if (!value) return ''
-  return value.length >= 5 ? value.slice(0, 5) : value
+function normalizeTime(value: string | null): string {
+  if (!value) return '--:--'
+  return value.slice(0, 5)
+}
+
+function getStatusStyles(status: string | null) {
+  switch (status) {
+    case 'CHO_DUYET': return { color: '#FAAD14', bg: '#FFFBE6', border: '#FFE58F', label: 'Chờ duyệt' }
+    case 'DA_XAC_NHAN': return { color: '#13C2C2', bg: '#E6FFFB', border: '#87E8DE', label: 'Sắp tới' }
+    case 'THANH_CONG': return { color: '#52C41A', bg: '#F6FFED', border: '#B7EB8F', label: 'Hoàn thành' }
+    case 'TU_CHOI': return { color: '#FF4D4F', bg: '#FFF1F0', border: '#FFA39E', label: 'Đã từ chối' }
+    default: return { color: '#8C8C8C', bg: '#F5F5F5', border: '#D9D9D9', label: 'Không xác định' }
+  }
 }
 
 export function AppointmentsPage() {
   const navigate = useNavigate()
   const { session } = useAuth()
   const maNguoiDung = session?.maNguoiDung ?? null
-
   const [scope, setScope] = useState<Scope>('upcoming')
   const [showCreate, setShowCreate] = useState(false)
 
   const query = useQuery({
     queryKey: ['appointments', maNguoiDung, scope],
-    queryFn: async () =>
-      (await api.get<AppointmentSummary[]>('/api/appointments', { params: { maNguoiDung, scope } })).data,
+    queryFn: async () => {
+      if (!maNguoiDung) return [] as AppointmentSummary[]
+      const actualScope = scope === 'upcoming' ? 'UPCOMING' : 'HISTORY'
+      return (await api.get<AppointmentSummary[]>('/api/appointments', { params: { maNguoiDung, scope: actualScope } })).data
+    },
     enabled: !!maNguoiDung,
   })
 
   const list = useMemo(() => query.data || [], [query.data])
 
   return (
-    <>
-      <PageHeader
-        title="Đặt lịch"
-        right={
-          <button className="btn btn-primary" type="button" onClick={() => setShowCreate(true)}>
-            +
-          </button>
-        }
+    <div className="member-page-shell">
+      <PageHeader 
+        title="Lịch hẹn của tôi" 
+        right={<button onClick={() => setShowCreate(true)} className="member-fab" type="button">+</button>} 
       />
 
-      <div className="card stack">
-        <div className="tabs">
-          <button
-            className={scope === 'upcoming' ? 'tab tab-active' : 'tab'}
-            type="button"
-            onClick={() => setScope('upcoming')}
-          >
-            Sắp tới
-          </button>
-          <button
-            className={scope === 'history' ? 'tab tab-active' : 'tab'}
-            type="button"
-            onClick={() => setScope('history')}
-          >
-            Lịch sử
-          </button>
+      <div className="member-panel">
+        <div className="member-tabs">
+          <button onClick={() => setScope('upcoming')} className={scope === 'upcoming' ? 'member-tab member-tab--active' : 'member-tab'}>Sắp tới</button>
+          <button onClick={() => setScope('history')} className={scope === 'history' ? 'member-tab member-tab--active' : 'member-tab'}>Lịch sử</button>
         </div>
 
-        {!maNguoiDung ? <div className="muted">Thiếu maNguoiDung. Hãy đăng nhập lại.</div> : null}
-        {query.isLoading ? <div className="muted">Đang tải…</div> : null}
-        {query.isError ? (
-          <div className="card" style={{ borderColor: 'rgba(239,68,68,0.6)' }}>
-            {getApiErrorMessage(query.error)}
-          </div>
-        ) : null}
+        {query.isError ? <div className="member-empty-state member-empty-state--error">{getApiErrorMessage(query.error)}</div> : null}
+        {query.isLoading ? <div className="member-empty-state">Đang tải lịch hẹn...</div> : null}
+        {!query.isLoading && list.length === 0 ? <div className="member-empty-state">Chưa có lịch hẹn nào.</div> : null}
+
+        <div className="member-appointment-list">
+          {list.map((a) => {
+            const status = getStatusStyles(a.trangThaiPhieu);
+            const dateParts = (a.ngayCuThe || '----/--/--').split('-'); 
+            return (
+              <article key={a.maPhieuDatLich} className="member-appointment-card" onClick={() => navigate(`/app/appointments/${a.maPhieuDatLich}`)}>
+                <div className="member-date-box">
+                  <span>THG {dateParts[1]}</span>
+                  <strong>{dateParts[2]}</strong>
+                </div>
+                <div className="member-appointment-card__content">
+                  <strong>{a.hoTenBacSi}</strong>
+                  <span>⏰ {normalizeTime(a.gioBatDau)} - {normalizeTime(a.gioKetThuc)}</span>
+                </div>
+                <div className="member-appointment-card__footer">
+                  <span className="member-status-pill" style={{ color: status.color, backgroundColor: status.bg, borderColor: status.border }}>{status.label}</span>
+                  <span className="member-link">Xem chi tiết ›</span>
+                </div>
+              </article>
+            );
+          })}
+        </div>
       </div>
 
-      <div style={{ height: 12 }} />
-
-      {list.length === 0 ? <div className="muted">Chưa có phiếu đặt lịch.</div> : null}
-      <div className="stack">
-        {list.map((a) => (
-          <div key={a.maPhieuDatLich} className="card row-between">
-            <div className="stack" style={{ gap: 4 }}>
-              <div style={{ fontWeight: 900 }}>{a.hoTenBacSi}</div>
-              <div className="muted">
-                {a.ngayCuThe || '—'} • {normalizeTime(a.gioBatDau)}–{normalizeTime(a.gioKetThuc)}
-              </div>
-              <div className="row">
-                <span className="chip">{a.trangThaiPhieu}</span>
-                {a.lyDoTuChoi ? <span className="chip">Lý do: {a.lyDoTuChoi}</span> : null}
-              </div>
-            </div>
-            <button className="btn" type="button" onClick={() => navigate(`/app/appointments/${a.maPhieuDatLich}`)}>
-              Chi tiết
-            </button>
-          </div>
-        ))}
-      </div>
-
-      {showCreate ? (
-        <div
-          role="dialog"
-          aria-modal="true"
-          onClick={() => setShowCreate(false)}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.55)',
-            display: 'grid',
-            placeItems: 'center',
-            padding: 12,
-            zIndex: 50,
-          }}
-        >
-          <div
-            className="card stack"
-            onClick={(e) => e.stopPropagation()}
-            style={{ width: 'min(520px, 100%)' }}
-          >
-            <div className="title">Tạo phiếu mới</div>
-            <div className="muted">Chọn bác sĩ gần nhất theo luồng UX.</div>
-            <div className="row">
-              <button
-                className="btn btn-primary"
-                type="button"
-                onClick={() => {
-                  setShowCreate(false)
-                  navigate('/app/home')
-                }}
-              >
-                Bác sĩ mới
-              </button>
-              <button
-                className="btn"
-                type="button"
-                onClick={() => {
-                  setShowCreate(false)
-                  navigate('/app/appointments/new/known')
-                }}
-              >
-                Bác sĩ đã biết
-              </button>
-              <button className="btn" type="button" onClick={() => setShowCreate(false)}>
-                Đóng
-              </button>
+      {showCreate && (
+        <div className="member-modal" onClick={() => setShowCreate(false)}>
+          <div className="member-modal__panel" onClick={e => e.stopPropagation()}>
+            <h3>Đặt lịch mới</h3>
+            <div className="member-modal__actions">
+              <button onClick={() => navigate('/app/search')} className="btn btn-primary" type="button">🔍 Tìm bác sĩ chuyên khoa</button>
+              <button onClick={() => navigate('/app/appointments/new/known')} className="btn btn-outline" type="button">👤 Bác sĩ đã từng khám</button>
             </div>
           </div>
         </div>
-      ) : null}
-    </>
+      )}
+    </div>
   )
 }
-
