@@ -2,7 +2,11 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../api/http";
-import type { AccountDoctorInfo, UpgradeToDoctorResponse } from "../../api/types";
+import type {
+  AccountDoctorInfo,
+  DoctorDocument,
+  UpgradeToDoctorResponse,
+} from "../../api/types";
 import { useAuth } from "../../auth/AuthContext";
 import { getApiErrorMessage } from "../../utils/errors";
 import {
@@ -31,6 +35,10 @@ type NoticeState = {
   title: string;
   description: string;
 } | null;
+type ExistingDocEditState = {
+  title: string;
+  file: File | null;
+};
 
 const specialtyOptions = [
   "Tim mạch",
@@ -103,18 +111,53 @@ export function DoctorProfileUpdatePage() {
 
   const rawData = query.data ?? null;
   const hasDoctorAccount = rawData?.coTaiKhoanBacSi ?? false;
+  const maBacSi = rawData?.maBacSi ?? null;
   const profileStatus = rawData?.trangThaiHoSo
     ? getProfileStatusMeta(rawData.trangThaiHoSo)
     : null;
   const activityStatus = rawData
     ? getActivityStatusMeta(rawData.trangThaiHoatDong)
     : null;
+  const [existingDocEdits, setExistingDocEdits] = useState<
+    Record<number, ExistingDocEditState>
+  >({});
+
+  const documentsQuery = useQuery({
+    queryKey: ["doctor-documents", maBacSi],
+    queryFn: async () => {
+      if (!maBacSi) return [];
+      const response = await api.get<DoctorDocument[]>(
+        `/api/doctors/${maBacSi}/documents`,
+      );
+      return response.data;
+    },
+    enabled: !!maBacSi,
+  });
+
+  const existingDocuments = documentsQuery.data ?? [];
 
   useEffect(() => {
     if (rawData) {
       setDoctorForm(getInitialDoctorForm(rawData));
     }
   }, [rawData]);
+
+  useEffect(() => {
+    if (!existingDocuments.length) {
+      setExistingDocEdits({});
+      return;
+    }
+    setExistingDocEdits((prev) => {
+      const next: Record<number, ExistingDocEditState> = {};
+      for (const doc of existingDocuments) {
+        next[doc.maTaiLieu] = {
+          title: prev[doc.maTaiLieu]?.title ?? doc.tieuDeTaiLieu,
+          file: prev[doc.maTaiLieu]?.file ?? null,
+        };
+      }
+      return next;
+    });
+  }, [existingDocuments]);
 
   const saveProfile = useMutation({
     mutationFn: async () => {
@@ -210,6 +253,67 @@ export function DoctorProfileUpdatePage() {
       prev.length > 1 ? prev.filter((d) => d.id !== id) : prev,
     );
   };
+
+  const updateExistingDoc = useMutation({
+    mutationFn: async (maTaiLieu: number) => {
+      if (!maBacSi) throw new Error("Thiếu mã bác sĩ");
+      const edit = existingDocEdits[maTaiLieu];
+      if (!edit) throw new Error("Không tìm thấy dữ liệu chỉnh sửa");
+      if (!edit.title.trim()) throw new Error("Vui lòng nhập tiêu đề tài liệu");
+      if (!edit.file) throw new Error("Vui lòng chọn file mới để cập nhật");
+
+      const form = new FormData();
+      form.append("tieuDeTaiLieu", edit.title.trim());
+      form.append("file", edit.file);
+      const response = await api.put<DoctorDocument>(
+        `/api/doctors/${maBacSi}/documents/${maTaiLieu}`,
+        form,
+        { headers: { "Content-Type": "multipart/form-data" } },
+      );
+      return response.data;
+    },
+    onSuccess: async (_, maTaiLieu) => {
+      setNotice({
+        tone: "success",
+        title: "Cập nhật minh chứng thành công",
+        description: "Tài liệu đã được thay file và cập nhật tiêu đề.",
+      });
+      setExistingDocEdits((prev) => ({
+        ...prev,
+        [maTaiLieu]: { ...prev[maTaiLieu], file: null },
+      }));
+      await qc.invalidateQueries({ queryKey: ["doctor-documents", maBacSi] });
+    },
+    onError: (error) => {
+      setNotice({
+        tone: "danger",
+        title: "Không thể cập nhật minh chứng",
+        description: getApiErrorMessage(error),
+      });
+    },
+  });
+
+  const deleteExistingDoc = useMutation({
+    mutationFn: async (maTaiLieu: number) => {
+      if (!maBacSi) throw new Error("Thiếu mã bác sĩ");
+      await api.delete(`/api/doctors/${maBacSi}/documents/${maTaiLieu}`);
+    },
+    onSuccess: async () => {
+      setNotice({
+        tone: "success",
+        title: "Xóa minh chứng thành công",
+        description: "Danh sách minh chứng đã được cập nhật.",
+      });
+      await qc.invalidateQueries({ queryKey: ["doctor-documents", maBacSi] });
+    },
+    onError: (error) => {
+      setNotice({
+        tone: "danger",
+        title: "Không thể xóa minh chứng",
+        description: getApiErrorMessage(error),
+      });
+    },
+  });
 
   return (
     <div className="doctor-page">
@@ -512,6 +616,114 @@ export function DoctorProfileUpdatePage() {
                 </button>
               }
             >
+              {maBacSi ? (
+                <div className="doctor-section-stack" style={{ marginBottom: 20 }}>
+                  <h3 className="doctor-list-card__title">Minh chứng hiện có</h3>
+                  {documentsQuery.isLoading ? (
+                    <DoctorNotice
+                      tone="info"
+                      title="Đang tải minh chứng"
+                      description="Hệ thống đang lấy danh sách minh chứng hiện tại."
+                    />
+                  ) : null}
+                  {documentsQuery.isError ? (
+                    <DoctorNotice
+                      tone="danger"
+                      title="Không tải được minh chứng"
+                      description={getApiErrorMessage(documentsQuery.error)}
+                    />
+                  ) : null}
+                  {!documentsQuery.isLoading &&
+                  !documentsQuery.isError &&
+                  existingDocuments.length === 0 ? (
+                    <DoctorNotice
+                      tone="warning"
+                      title="Chưa có minh chứng"
+                      description="Bạn chưa có tài liệu nào, hãy thêm mới ở phần dưới."
+                    />
+                  ) : null}
+                  {existingDocuments.map((doc) => {
+                    const edit = existingDocEdits[doc.maTaiLieu] ?? {
+                      title: doc.tieuDeTaiLieu,
+                      file: null,
+                    };
+                    return (
+                      <div key={doc.maTaiLieu} className="doctor-list-card">
+                        <div className="doctor-list-card__header">
+                          <div>
+                            <h4 className="doctor-list-card__title">
+                              #{doc.maTaiLieu} - {doc.tieuDeTaiLieu}
+                            </h4>
+                            <a
+                              className="doctor-list-card__subtitle"
+                              href={doc.duongDanFileUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              Mở tài liệu hiện tại
+                            </a>
+                          </div>
+                          <button
+                            type="button"
+                            className="doctor-button doctor-button--danger"
+                            disabled={deleteExistingDoc.isPending}
+                            onClick={() => deleteExistingDoc.mutate(doc.maTaiLieu)}
+                          >
+                            {deleteExistingDoc.isPending ? "Đang xóa..." : "Xóa"}
+                          </button>
+                        </div>
+                        <div className="doctor-form-grid">
+                          <div className="doctor-field">
+                            <label className="doctor-label">Tiêu đề mới</label>
+                            <input
+                              className="doctor-input"
+                              value={edit.title}
+                              onChange={(event) =>
+                                setExistingDocEdits((prev) => ({
+                                  ...prev,
+                                  [doc.maTaiLieu]: {
+                                    ...edit,
+                                    title: event.target.value,
+                                  },
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="doctor-field">
+                            <label className="doctor-label">File thay thế</label>
+                            <input
+                              className="doctor-input"
+                              type="file"
+                              onChange={(event) =>
+                                setExistingDocEdits((prev) => ({
+                                  ...prev,
+                                  [doc.maTaiLieu]: {
+                                    ...edit,
+                                    file: event.target.files?.[0] ?? null,
+                                  },
+                                }))
+                              }
+                            />
+                          </div>
+                        </div>
+                        <div className="doctor-button-row" style={{ marginTop: 12 }}>
+                          <button
+                            type="button"
+                            className="doctor-button doctor-button--primary"
+                            disabled={updateExistingDoc.isPending}
+                            onClick={() => updateExistingDoc.mutate(doc.maTaiLieu)}
+                          >
+                            {updateExistingDoc.isPending
+                              ? "Đang cập nhật..."
+                              : "Lưu sửa minh chứng"}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
+
               <div className="doctor-section-stack">
                 {docs.map((doc) => (
                   <div key={doc.id} className="doctor-list-card">
