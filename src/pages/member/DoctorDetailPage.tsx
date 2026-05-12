@@ -140,9 +140,19 @@ export function DoctorDetailPage() {
 
   return (
     <main className="member-page-shell" style={{ backgroundColor: '#f3f4f6', minHeight: '100vh', paddingBottom: '40px' }}>
+      
+      {/* HEADER CÓ LABEL BỌC TRÒN */}
       <PageHeader
-        title="Hồ sơ Bác sĩ"
-        right={<Link to="/app/home" className="member-link" style={{ color: '#2563eb', fontWeight: 'bold' }}>Tìm bác sĩ khác</Link>}
+        title={
+          <span style={{ backgroundColor: '#eff6ff', color: '#1d4ed8', padding: '6px 20px', borderRadius: '24px', fontSize: '20px', fontWeight: 'bold', border: '1px solid #bfdbfe', display: 'inline-block' }}>
+            Hồ sơ Bác sĩ
+          </span>
+        }
+        right={
+          <Link to="/app/home" style={{ backgroundColor: '#ffffff', color: '#4b5563', padding: '8px 16px', borderRadius: '24px', fontSize: '14px', border: '1px solid #d1d5db', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 'bold', boxShadow: '0 1px 2px rgba(0,0,0,0.05)', transition: 'all 0.2s' }}>
+            🔍 Tìm bác sĩ khác
+          </Link>
+        }
       />
 
       <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
@@ -156,21 +166,50 @@ export function DoctorDetailPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             
             {/* [VÙNG TRÁI TRÊN] THÔNG TIN CƠ BẢN BÁC SĨ */}
-            <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+            <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', position: 'relative' }}>
+              
+              {/* Nút Theo Dõi ở góc phải trên */}
+              <div style={{ position: 'absolute', top: '24px', right: '24px' }}>
+                <button
+                  type="button"
+                  disabled={isFollowingActionPending || !maNguoiDung}
+                  onClick={() => {
+                    if (!maNguoiDung) return;
+                    isFollowed ? unfollowMutation.mutate() : followMutation.mutate();
+                  }}
+                  style={{
+                    padding: '8px 16px', borderRadius: '20px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s',
+                    backgroundColor: isFollowed ? '#f3f4f6' : '#eff6ff',
+                    color: isFollowed ? '#4b5563' : '#2563eb',
+                    border: isFollowed ? '1px solid #d1d5db' : '1px solid #bfdbfe'
+                  }}
+                >
+                  {isFollowingActionPending ? "..." : isFollowed ? "Đang theo dõi" : "Theo dõi"}
+                </button>
+              </div>
+
               <div style={{ display: 'flex', gap: '24px', alignItems: 'center' }}>
                 <div style={{ width: '100px', height: '100px', borderRadius: '50%', backgroundColor: '#e0e7ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px', fontWeight: 'bold', color: '#4f46e5', flexShrink: 0, overflow: 'hidden', border: '3px solid #eff6ff' }}>
                   {doctor.anhDaiDien ? <img src={doctor.anhDaiDien} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : initials}
                 </div>
 
                 <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div>
-                      <span style={{ fontSize: '13px', color: '#6b7280', textTransform: 'uppercase', fontWeight: 'bold', letterSpacing: '0.05em' }}>
-                        {doctor.trinhDoChuyenMon || "Bác sĩ"}
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                    <span style={{ fontSize: '13px', color: '#6b7280', textTransform: 'uppercase', fontWeight: 'bold', letterSpacing: '0.05em' }}>
+                      {doctor.trinhDoChuyenMon || "Bác sĩ"}
+                    </span>
+                    <h2 style={{ fontSize: '22px', color: '#111827', margin: '4px 0 8px 0', fontWeight: 'bold', lineHeight: '1.2' }}>
+                      {doctor.hoTenDayDu}
+                    </h2>
+                    
+                    {/* LABELS: Trạng thái & CCHN */}
+                    <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+                      <span style={{ fontSize: '11px', padding: '4px 8px', backgroundColor: '#d1fae5', color: '#b45309', borderRadius: '4px', fontWeight: 'bold', textTransform: 'uppercase', border: '1px solid #fde68a' }}>
+                        {doctor.trangThaiHoSo}
                       </span>
-                      <h2 style={{ fontSize: '22px', color: '#111827', margin: '4px 0 8px 0', fontWeight: 'bold', lineHeight: '1.2' }}>
-                        {doctor.hoTenDayDu}
-                      </h2>
+                      <span style={{ fontSize: '11px', padding: '4px 8px', backgroundColor: '#f3f4f6', color: '#4b5563', borderRadius: '4px', fontWeight: 'bold', textTransform: 'uppercase', border: '1px solid #e5e7eb' }}>
+                        CCHN: {doctor.maChungChiHanhNghe}
+                      </span>
                     </div>
                   </div>
 
@@ -186,26 +225,21 @@ export function DoctorDetailPage() {
                 </div>
               </div>
 
-              <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #f3f4f6', paddingTop: '16px' }}>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                   <span style={{ fontSize: '13px', padding: '6px 12px', backgroundColor: '#f3f4f6', color: '#4b5563', borderRadius: '8px' }}>CCHN: {doctor.maChungChiHanhNghe}</span>
-                </div>
-                
-                <button
-                  type="button"
-                  disabled={isFollowingActionPending || !maNguoiDung}
-                  onClick={() => {
-                    if (!maNguoiDung) return;
-                    isFollowed ? unfollowMutation.mutate() : followMutation.mutate();
-                  }}
-                  style={{
-                    padding: '8px 20px', borderRadius: '20px', fontSize: '14px', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s',
-                    backgroundColor: isFollowed ? '#f3f4f6' : '#eff6ff',
-                    color: isFollowed ? '#4b5563' : '#2563eb',
-                    border: isFollowed ? '1px solid #d1d5db' : '1px solid #bfdbfe'
-                  }}
+              {/* NÚT ĐẶT LỊCH VÀ NHẮN TIN (NẰM CHÍNH DIỆN TRONG KHUNG) */}
+              <div style={{ marginTop: '24px', display: 'flex', gap: '12px', borderTop: '1px solid #f3f4f6', paddingTop: '20px' }}>
+                <button 
+                  type="button" 
+                  onClick={() => navigate(`/app/messages`)} 
+                  style={{ flex: 1, padding: '12px', borderRadius: '12px', border: '2px solid #e5e7eb', backgroundColor: '#ffffff', color: '#374151', fontSize: '15px', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s' }}
                 >
-                  {isFollowingActionPending ? "..." : isFollowed ? "Đang theo dõi" : "♥ Theo dõi"}
+                  💬 Nhắn tin
+                </button>
+                <button 
+                  type="button" 
+                  onClick={() => navigate(`/app/doctors/${maBacSi}/slots`)} 
+                  style={{ flex: 2, padding: '12px', borderRadius: '12px', border: 'none', backgroundColor: '#2563eb', color: '#ffffff', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.3)', transition: 'all 0.2s' }}
+                >
+                  🗓 Đặt lịch ngay
                 </button>
               </div>
             </div>
@@ -254,7 +288,7 @@ export function DoctorDetailPage() {
           </div>
 
           {/* ========================================= */}
-          {/* CỘT PHẢI (Vùng Phải - Đánh giá, Bình luận, Nút) */}
+          {/* CỘT PHẢI (Vùng Phải - Đánh giá, Bình luận) */}
           {/* ========================================= */}
           <aside style={{ display: 'flex', flexDirection: 'column', gap: '20px', position: 'sticky', top: '24px' }}>
             
@@ -269,11 +303,11 @@ export function DoctorDetailPage() {
               </div>
 
               {/* Header Nút Viết Đánh Giá */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '40px' }}>
                 <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#111827', margin: 0 }}>Bình luận gần đây</h3>
                 <button 
                   onClick={() => setIsWritingReview(!isWritingReview)}
-                  style={{ padding: '10px 15px', borderRadius: '8px', border: '1px solid #e5e7eb', backgroundColor: isWritingReview ? '#f3f4f6' : '#ffffff', color: '#374151', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer' }}
+                  style={{ padding: '10px 18px', borderRadius: '8px', border: '1px solid #e5e7eb', backgroundColor: isWritingReview ? '#f3f4f6' : '#ffffff', color: '#374151', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer' }}
                 >
                   {isWritingReview ? "Hủy" : "✎ Viết đánh giá"}
                 </button>
@@ -311,7 +345,7 @@ export function DoctorDetailPage() {
               )}
 
               {/* Danh sách bình luận */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxHeight: '400px', overflowY: 'auto', paddingRight: '4px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxHeight: '500px', overflowY: 'auto', paddingRight: '4px' }}>
                 {reviewQuery.isLoading && <div style={{ fontSize: '14px', color: '#6b7280' }}>Đang tải...</div>}
                 {!reviewQuery.isLoading && (reviewQuery.data || []).length === 0 && (
                   <div style={{ padding: '24px 16px', backgroundColor: '#f9fafb', borderRadius: '8px', textAlign: 'center', color: '#6b7280', fontSize: '14px' }}>
@@ -339,43 +373,6 @@ export function DoctorDetailPage() {
                   </div>
                 ))}
               </div>
-            </div>
-
-            {/* KHỐI NÚT ĐẶT LỊCH / NHẮN TIN DÍNH (STICKY ACTION) */}
-            <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, backgroundColor: '#ffffff', padding: '16px 24px', borderTop: '1px solid #e5e7eb', boxShadow: '0 -4px 10px rgba(0,0,0,0.05)', display: 'flex', gap: '12px', zIndex: 10 }}>
-
-              <div style={{ maxWidth: '800px', margin: '0 auto', width: '100%', display: 'flex', gap: '12px' }}>
-
-                <button 
-
-                  type="button" 
-
-                  onClick={() => navigate(`/app/messages`)} 
-
-                  style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '2px solid #e5e7eb', backgroundColor: '#ffffff', color: '#374151', fontSize: '15px', fontWeight: 'bold', cursor: 'pointer' }}
-
-                >
-
-                  💬 Nhắn tin
-
-                </button>
-
-                <button 
-
-                  type="button" 
-
-                  onClick={() => navigate(`/app/doctors/${maBacSi}/slots`)} 
-
-                  style={{ flex: 2, padding: '14px', borderRadius: '12px', border: 'none', backgroundColor: '#2563eb', color: '#ffffff', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.3)' }}
-
-                >
-
-                  🗓 Đặt lịch ngay
-
-                </button>
-
-              </div>
-
             </div>
 
           </aside>
