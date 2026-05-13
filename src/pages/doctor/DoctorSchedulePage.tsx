@@ -157,12 +157,12 @@ export function DoctorSchedulePage() {
 
     if (editorMode === 'create') {
       if (createApplyMode === 'week') return listDatesNext7Days(baseDate)
-      return listDatesUntilMonthEnd(baseDate)
+      return listMonthDates(baseDate)
     }
 
     if (existingApplyMode === 'today') return [detailDate]
     if (existingApplyMode === 'next7') return listDatesNext7Days(baseDate)
-    return listDatesUntilMonthEnd(baseDate)
+    return listMonthDates(baseDate)
   }
 
   const inferDayState = (targetSlots: WorkingSlot[], targetDate: string): DayState => {
@@ -184,6 +184,7 @@ export function DoctorSchedulePage() {
       const targetDates = getApplyDates()
       if (targetDates.length === 0) throw new Error('Không có ngày hợp lệ để cập nhật.')
 
+      const actionScope = editorMode === 'create' ? 'APPEND' : existingApplyMode === 'today' ? 'TODAY' : existingApplyMode === 'next7' ? 'NEXT_7_DAYS' : 'ALL_CREATED_DAYS'
       const items = targetDates.map((date) => ({
         thuTrongTuan: null,
         ngayCuThe: date,
@@ -192,6 +193,7 @@ export function DoctorSchedulePage() {
         maKhungGio,
         soLuongToiDa,
         trangThaiLich,
+        actionScope,
       }))
 
       const res = await api.put<WorkingSchedule[]>(`/api/doctors/${maBacSi}/working-slots`, { items })
@@ -472,7 +474,7 @@ export function DoctorSchedulePage() {
                       <select id="schedule-apply-mode" className="doctor-select" value={existingApplyMode} onChange={(event) => setExistingApplyMode(event.target.value as ExistingApplyMode)}>
                         <option value="today">Chỉ ngày hôm nay</option>
                         <option value="next7">7 ngày sau</option>
-                        <option value="forward">Tất cả ngày sau</option>
+                        <option value="forward">Tất cả các ngày đã tạo lịch</option>
                       </select>
                     )}
                   </div>

@@ -188,6 +188,17 @@ export type WorkingSchedule = {
   chiTiet: WorkingScheduleSlot[]
 }
 
+export type WorkingSlotUpsertItem = {
+  thuTrongTuan: number | null
+  ngayCuThe: string | null
+  gioBatDau: string
+  gioKetThuc: string
+  maKhungGio: number
+  soLuongToiDa: number | null
+  trangThaiLich: string | null
+  actionScope?: 'APPEND' | 'REPLACE' | 'TODAY' | 'NEXT_7_DAYS' | 'ALL_CREATED_DAYS' | string | null
+}
+
 export type DoctorScheduleCalendarDay = {
   ngay: string
   trangThai: 'CHUA_CO_LICH' | 'DA_TAO_LICH' | 'DA_CO_NGUOI_DAT' | 'NGAY_DA_QUA' | string
