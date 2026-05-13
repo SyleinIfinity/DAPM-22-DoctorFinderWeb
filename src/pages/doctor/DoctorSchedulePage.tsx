@@ -58,19 +58,6 @@ function monthGrid(anchor: Date) {
   return Array.from({ length: 42 }, (_, index) => addDays(start, index))
 }
 
-function listDatesUntilMonthEnd(baseDate: Date) {
-  const result: string[] = []
-  const monthEnd = new Date(baseDate.getFullYear(), baseDate.getMonth() + 1, 0)
-
-  for (let cursor = new Date(baseDate); cursor <= monthEnd; cursor = addDays(cursor, 1)) {
-    if (ymd(cursor) >= todayYmd()) {
-      result.push(ymd(cursor))
-    }
-  }
-
-  return result
-}
-
 function listDatesNext7Days(baseDate: Date) {
   return Array.from({ length: 7 }, (_, index) => addDays(baseDate, index))
     .map((date) => ymd(date))
