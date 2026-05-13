@@ -26,11 +26,11 @@ type NoticeState = {
 type RequestTab = 'all' | 'pending' | 'approved' | 'rejected'
 
 function isRejectedStatus(status: string) {
-  return status === 'TU_CHOI' || status === 'DA_TU_CHOI' || status === 'DA_HUY'
+  return status === 'TU_CHOI' || status === 'DA_HUY'
 }
 
 function isApprovedStatus(status: string) {
-  return status === 'DA_DUYET' || status === 'DA_XAC_NHAN'
+  return status === 'DA_XAC_NHAN' || status === 'DA_KHAM'
 }
 
 const TAB_LABELS: Record<RequestTab, string> = {
@@ -264,6 +264,17 @@ export function DoctorRequestsPage() {
                             Từ chối lịch hẹn
                           </button>
                         </>
+                      ) : request.trangThaiPhieu === 'DA_XAC_NHAN' ? (
+                        <button
+                          className="doctor-button doctor-button--success"
+                          type="button"
+                          onClick={async () => {
+                            await api.post(`/api/appointments/${request.maPhieuDatLich}/complete`)
+                            await qc.invalidateQueries({ queryKey: ['appointment-requests', maBacSi] })
+                          }}
+                        >
+                          Đánh dấu đã khám
+                        </button>
                       ) : null}
                     </div>
                   )}

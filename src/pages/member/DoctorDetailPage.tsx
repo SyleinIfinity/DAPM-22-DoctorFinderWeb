@@ -2,8 +2,9 @@ import { Link, useParams, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "../../components/PageHeader";
 import { api } from "../../api/http";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type {
+  CreateReviewRequest,
   DoctorDocument,
   DoctorProfile,
   FollowedDoctor,
@@ -13,6 +14,25 @@ import type {
 import { getApiErrorMessage } from "../../utils/errors";
 import { useAuth } from "../../auth/AuthContext";
 
+function StarButton({ active, onClick }: { active: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        background: "none",
+        border: "none",
+        fontSize: 24,
+        cursor: "pointer",
+        padding: 0,
+        filter: active ? "none" : "grayscale(100%) opacity(35%)",
+      }}
+    >
+      ⭐
+    </button>
+  );
+}
+
 export function DoctorDetailPage() {
   const params = useParams();
   const navigate = useNavigate();
@@ -21,7 +41,6 @@ export function DoctorDetailPage() {
   const maBacSi = Number(params.maBacSi);
   const maNguoiDung = session?.maNguoiDung ?? null;
 
-  // --- STATE CHO PHẦN VIẾT ĐÁNH GIÁ ---
   const [isWritingReview, setIsWritingReview] = useState(false);
   const [ratingInput, setRatingInput] = useState(5);
   const [reviewTextInput, setReviewTextInput] = useState("");
@@ -51,25 +70,20 @@ export function DoctorDetailPage() {
 
   const documentsQuery = useQuery({
     queryKey: ["doctor-documents-public", maBacSi],
-    queryFn: async () =>
-      (await api.get<DoctorDocument[]>(`/api/doctors/${maBacSi}/documents`)).data,
+    queryFn: async () => (await api.get<DoctorDocument[]>(`/api/doctors/${maBacSi}/documents`)).data,
     enabled: Number.isFinite(maBacSi) && maBacSi > 0,
   });
 
   const followsQuery = useQuery({
     queryKey: ["follows", maNguoiDung],
-    queryFn: async () =>
-      (await api.get<FollowedDoctor[]>("/api/follows", { params: { maNguoiDung } }))
-        .data,
+    queryFn: async () => (await api.get<FollowedDoctor[]>("/api/follows", { params: { maNguoiDung } })).data,
     enabled: !!maNguoiDung,
   });
 
   const followMutation = useMutation({
     mutationFn: async () => {
       if (!maNguoiDung) throw new Error("Vui lòng đăng nhập member để theo dõi");
-      return (
-        await api.post(`/api/follows/${maBacSi}`, null, { params: { maNguoiDung } })
-      ).data;
+      return (await api.post(`/api/follows/${maBacSi}`, null, { params: { maNguoiDung } })).data;
     },
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ["follows", maNguoiDung] });
@@ -79,31 +93,36 @@ export function DoctorDetailPage() {
   const unfollowMutation = useMutation({
     mutationFn: async () => {
       if (!maNguoiDung) throw new Error("Vui lòng đăng nhập member để bỏ theo dõi");
-      return (
-        await api.delete(`/api/follows/${maBacSi}`, { params: { maNguoiDung } })
-      ).data;
+      return (await api.delete(`/api/follows/${maBacSi}`, { params: { maNguoiDung } })).data;
     },
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ["follows", maNguoiDung] });
     },
   });
 
-  // NÚT XỬ LÝ GỬI BÌNH LUẬN
-  const handleSubmitReview = () => {
-    if (!maNguoiDung) {
-      alert("Vui lòng đăng nhập để đánh giá!");
-      return;
-    }
-    if (!reviewTextInput.trim()) {
-      alert("Vui lòng nhập nội dung đánh giá!");
-      return;
-    }
-    console.log("Gửi đánh giá:", { soSao: ratingInput, noiDung: reviewTextInput });
-    alert("Cảm ơn bạn đã gửi đánh giá!");
-    setIsWritingReview(false);
-    setReviewTextInput("");
-    setRatingInput(5);
-  };
+  const reviewMutation = useMutation({
+    mutationFn: async () => {
+      if (!maNguoiDung) throw new Error("Vui lòng đăng nhập để đánh giá");
+      const trimmed = reviewTextInput.trim();
+      if (!trimmed) throw new Error("Vui lòng nhập nội dung đánh giá");
+      const payload: CreateReviewRequest = {
+        maNguoiDung,
+        maBacSi,
+        soSao: ratingInput,
+        noiDung: trimmed,
+      };
+      return (await api.post(`/api/reviews/doctors/${maBacSi}`, payload)).data;
+    },
+    onSuccess: async () => {
+      setIsWritingReview(false);
+      setReviewTextInput("");
+      setRatingInput(5);
+      await qc.invalidateQueries({ queryKey: ["doctor-reviews", maBacSi] });
+      await qc.invalidateQueries({ queryKey: ["doctor-rating-summary", maBacSi] });
+    },
+  });
+
+  const canSubmitReview = useMemo(() => !!maNguoiDung && reviewTextInput.trim().length > 0, [maNguoiDung, reviewTextInput]);
 
   if (!Number.isFinite(maBacSi) || maBacSi <= 0) {
     return (
@@ -137,39 +156,20 @@ export function DoctorDetailPage() {
   const isFollowingActionPending = followMutation.isPending || unfollowMutation.isPending;
   const initials = (doctor.hoTenDayDu || "BS").split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase() || "BS";
   const rating = ratingQuery.data;
+  const reviews = reviewQuery.data ?? [];
 
   return (
-    <main className="member-page-shell" style={{ backgroundColor: '#f3f4f6', minHeight: '100vh', paddingBottom: '40px' }}>
-      
-      {/* HEADER CÓ LABEL BỌC TRÒN */}
+    <main className="member-page-shell" style={{ backgroundColor: "#f3f4f6", minHeight: "100vh", paddingBottom: "40px" }}>
       <PageHeader
-        title={
-          <span style={{ backgroundColor: '#eff6ff', color: '#1d4ed8', padding: '6px 20px', borderRadius: '24px', fontSize: '20px', fontWeight: 'bold', border: '1px solid #bfdbfe', display: 'inline-block' }}>
-            Hồ sơ Bác sĩ
-          </span>
-        }
-        right={
-          <Link to="/app/home" style={{ backgroundColor: '#ffffff', color: '#4b5563', padding: '8px 16px', borderRadius: '24px', fontSize: '14px', border: '1px solid #d1d5db', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 'bold', boxShadow: '0 1px 2px rgba(0,0,0,0.05)', transition: 'all 0.2s' }}>
-            🔍 Tìm bác sĩ khác
-          </Link>
-        }
+        title={<span style={{ backgroundColor: "#eff6ff", color: "#1d4ed8", padding: "6px 20px", borderRadius: "24px", fontSize: "20px", fontWeight: "bold", border: "1px solid #bfdbfe", display: "inline-block" }}>Hồ sơ Bác sĩ</span>}
+        right={<Link to="/app/home" style={{ backgroundColor: "#ffffff", color: "#4b5563", padding: "8px 16px", borderRadius: "24px", fontSize: "14px", border: "1px solid #d1d5db", textDecoration: "none", display: "flex", alignItems: "center", gap: "6px", fontWeight: "bold", boxShadow: "0 1px 2px rgba(0,0,0,0.05)", transition: "all 0.2s" }}>🔍 Tìm bác sĩ khác</Link>}
       />
 
-      <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
-        
-        {/* === GRID CHIA 2 CỘT === */}
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px', alignItems: 'start' }}>
-          
-          {/* ========================================= */}
-          {/* CỘT TRÁI (Vùng Trái Trên & Trái Dưới) */}
-          {/* ========================================= */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            
-            {/* [VÙNG TRÁI TRÊN] THÔNG TIN CƠ BẢN BÁC SĨ */}
-            <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', position: 'relative' }}>
-              
-              {/* Nút Theo Dõi ở góc phải trên */}
-              <div style={{ position: 'absolute', top: '24px', right: '24px' }}>
+      <div style={{ padding: "20px", maxWidth: "1200px", margin: "0 auto" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "24px", alignItems: "start" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+            <div style={{ backgroundColor: "#ffffff", borderRadius: "16px", padding: "24px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)", position: "relative" }}>
+              <div style={{ position: "absolute", top: "24px", right: "24px" }}>
                 <button
                   type="button"
                   disabled={isFollowingActionPending || !maNguoiDung}
@@ -178,107 +178,92 @@ export function DoctorDetailPage() {
                     isFollowed ? unfollowMutation.mutate() : followMutation.mutate();
                   }}
                   style={{
-                    padding: '8px 16px', borderRadius: '20px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s',
-                    backgroundColor: isFollowed ? '#f3f4f6' : '#eff6ff',
-                    color: isFollowed ? '#4b5563' : '#2563eb',
-                    border: isFollowed ? '1px solid #d1d5db' : '1px solid #bfdbfe'
+                    padding: "8px 16px", borderRadius: "20px", fontSize: "13px", fontWeight: "bold", cursor: "pointer", transition: "all 0.2s",
+                    backgroundColor: isFollowed ? "#f3f4f6" : "#eff6ff",
+                    color: isFollowed ? "#4b5563" : "#2563eb",
+                    border: isFollowed ? "1px solid #d1d5db" : "1px solid #bfdbfe"
                   }}
                 >
                   {isFollowingActionPending ? "..." : isFollowed ? "Đang theo dõi" : "Theo dõi"}
                 </button>
               </div>
 
-              <div style={{ display: 'flex', gap: '24px', alignItems: 'center' }}>
-                <div style={{ width: '100px', height: '100px', borderRadius: '50%', backgroundColor: '#e0e7ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px', fontWeight: 'bold', color: '#4f46e5', flexShrink: 0, overflow: 'hidden', border: '3px solid #eff6ff' }}>
-                  {doctor.anhDaiDien ? <img src={doctor.anhDaiDien} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : initials}
+              <div style={{ display: "flex", gap: "24px", alignItems: "center" }}>
+                <div style={{ width: "100px", height: "100px", borderRadius: "50%", backgroundColor: "#e0e7ff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "32px", fontWeight: "bold", color: "#4f46e5", flexShrink: 0, overflow: "hidden", border: "3px solid #eff6ff" }}>
+                  {doctor.anhDaiDien ? <img src={doctor.anhDaiDien} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : initials}
                 </div>
 
                 <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-                    <span style={{ fontSize: '13px', color: '#6b7280', textTransform: 'uppercase', fontWeight: 'bold', letterSpacing: '0.05em' }}>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+                    <span style={{ fontSize: "13px", color: "#6b7280", textTransform: "uppercase", fontWeight: "bold", letterSpacing: "0.05em" }}>
                       {doctor.trinhDoChuyenMon || "Bác sĩ"}
                     </span>
-                    <h2 style={{ fontSize: '22px', color: '#111827', margin: '4px 0 8px 0', fontWeight: 'bold', lineHeight: '1.2' }}>
+                    <h2 style={{ fontSize: "22px", color: "#111827", margin: "4px 0 8px 0", fontWeight: "bold", lineHeight: "1.2" }}>
                       {doctor.hoTenDayDu}
                     </h2>
-                    
-                    {/* LABELS: Trạng thái & CCHN */}
-                    <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
-                      <span style={{ fontSize: '11px', padding: '4px 8px', backgroundColor: '#d1fae5', color: '#b45309', borderRadius: '4px', fontWeight: 'bold', textTransform: 'uppercase', border: '1px solid #fde68a' }}>
+                    <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
+                      <span style={{ fontSize: "11px", padding: "4px 8px", backgroundColor: "#d1fae5", color: "#b45309", borderRadius: "4px", fontWeight: "bold", textTransform: "uppercase", border: "1px solid #fde68a" }}>
                         {doctor.trangThaiHoSo}
                       </span>
-                      <span style={{ fontSize: '11px', padding: '4px 8px', backgroundColor: '#f3f4f6', color: '#4b5563', borderRadius: '4px', fontWeight: 'bold', textTransform: 'uppercase', border: '1px solid #e5e7eb' }}>
+                      <span style={{ fontSize: "11px", padding: "4px 8px", backgroundColor: "#f3f4f6", color: "#4b5563", borderRadius: "4px", fontWeight: "bold", textTransform: "uppercase", border: "1px solid #e5e7eb" }}>
                         CCHN: {doctor.maChungChiHanhNghe}
                       </span>
                     </div>
                   </div>
 
-                  <div style={{ color: '#3b82f6', fontWeight: '600', fontSize: '15px', marginBottom: '6px' }}>
+                  <div style={{ color: "#3b82f6", fontWeight: "600", fontSize: "15px", marginBottom: "6px" }}>
                     Khoa: {doctor.chuyenKhoa}
                   </div>
-                  <div style={{ color: '#4b5563', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                  <div style={{ color: "#4b5563", fontSize: "14px", display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
                     🏥 {doctor.tenCoSoYTe}
                   </div>
-                  <div style={{ color: '#6b7280', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <div style={{ color: "#6b7280", fontSize: "14px", display: "flex", alignItems: "center", gap: "6px" }}>
                     📍 {doctor.diaChiLamViec || "Chưa cập nhật địa chỉ"}
                   </div>
                 </div>
               </div>
 
-              {/* NÚT ĐẶT LỊCH VÀ NHẮN TIN (NẰM CHÍNH DIỆN TRONG KHUNG) */}
-              <div style={{ marginTop: '24px', display: 'flex', gap: '12px', borderTop: '1px solid #f3f4f6', paddingTop: '20px' }}>
-                <button 
-                  type="button" 
-                  onClick={() => navigate(`/app/messages`)} 
-                  style={{ flex: 1, padding: '12px', borderRadius: '12px', border: '2px solid #e5e7eb', backgroundColor: '#ffffff', color: '#374151', fontSize: '15px', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s' }}
-                >
+              <div style={{ marginTop: "24px", display: "flex", gap: "12px", borderTop: "1px solid #f3f4f6", paddingTop: "20px" }}>
+                <button type="button" onClick={() => navigate(`/app/messages`)} style={{ flex: 1, padding: "12px", borderRadius: "12px", border: "2px solid #e5e7eb", backgroundColor: "#ffffff", color: "#374151", fontSize: "15px", fontWeight: "bold", cursor: "pointer", transition: "all 0.2s" }}>
                   💬 Nhắn tin
                 </button>
-                <button 
-                  type="button" 
-                  onClick={() => navigate(`/app/doctors/${maBacSi}/slots`)} 
-                  style={{ flex: 2, padding: '12px', borderRadius: '12px', border: 'none', backgroundColor: '#2563eb', color: '#ffffff', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.3)', transition: 'all 0.2s' }}
-                >
+                <button type="button" onClick={() => navigate(`/app/doctors/${maBacSi}/slots`)} style={{ flex: 2, padding: "12px", borderRadius: "12px", border: "none", backgroundColor: "#2563eb", color: "#ffffff", fontSize: "16px", fontWeight: "bold", cursor: "pointer", boxShadow: "0 4px 6px -1px rgba(37, 99, 235, 0.3)", transition: "all 0.2s" }}>
                   🗓 Đặt lịch ngay
                 </button>
               </div>
             </div>
 
-            {/* [VÙNG TRÁI DƯỚI] GIỚI THIỆU & MINH CHỨNG */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              {/* Giới thiệu */}
-              <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
-                <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#111827', margin: '0 0 16px 0' }}>Giới thiệu chuyên môn</h3>
-                <p style={{ margin: 0, fontSize: '15px', color: '#4b5563', lineHeight: '1.7', whiteSpace: 'pre-line' }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+              <div style={{ backgroundColor: "#ffffff", borderRadius: "16px", padding: "24px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
+                <h3 style={{ fontSize: "18px", fontWeight: "bold", color: "#111827", margin: "0 0 16px 0" }}>Giới thiệu chuyên môn</h3>
+                <p style={{ margin: 0, fontSize: "15px", color: "#4b5563", lineHeight: "1.7", whiteSpace: "pre-line" }}>
                   {doctor.moTaBanThan || "Bác sĩ chưa cập nhật bài giới thiệu chi tiết."}
                 </p>
               </div>
 
-              {/* Bằng cấp / Minh chứng */}
-              <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
-                <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#111827', margin: '0 0 16px 0' }}>Minh chứng & Bằng cấp</h3>
-                
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
+              <div style={{ backgroundColor: "#ffffff", borderRadius: "16px", padding: "24px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
+                <h3 style={{ fontSize: "18px", fontWeight: "bold", color: "#111827", margin: "0 0 16px 0" }}>Minh chứng & Bằng cấp</h3>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
                   {!documentsQuery.isLoading && (documentsQuery.data || []).length === 0 && (
-                    <div style={{ gridColumn: 'span 2', padding: '16px', backgroundColor: '#f9fafb', borderRadius: '8px', color: '#6b7280', fontSize: '14px', textAlign: 'center' }}>
+                    <div style={{ gridColumn: "span 2", padding: "16px", backgroundColor: "#f9fafb", borderRadius: "8px", color: "#6b7280", fontSize: "14px", textAlign: "center" }}>
                       Chưa có minh chứng công khai.
                     </div>
                   )}
-                  
+
                   {(documentsQuery.data || []).map((document) => (
                     <a
                       key={document.maTaiLieu}
                       href={document.duongDanFileUrl}
                       target="_blank"
                       rel="noreferrer"
-                      style={{ padding: '16px', border: '1px solid #e5e7eb', borderRadius: '12px', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '12px', transition: 'background-color 0.2s' }}
-                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8fafc'}
-                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                      style={{ padding: "16px", border: "1px solid #e5e7eb", borderRadius: "12px", textDecoration: "none", display: "flex", alignItems: "center", gap: "12px", transition: "background-color 0.2s" }}
+                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#f8fafc")}
+                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
                     >
-                      <span style={{ fontSize: '28px' }}>📄</span>
-                      <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#374151', lineHeight: '1.4' }}>{document.tieuDeTaiLieu}</span>
-                        <span style={{ fontSize: '12px', color: '#9ca3af', marginTop: '2px' }}>Xem chi tiết</span>
+                      <span style={{ fontSize: "28px" }}>📄</span>
+                      <div style={{ display: "flex", flexDirection: "column" }}>
+                        <span style={{ fontSize: "14px", fontWeight: "bold", color: "#374151", lineHeight: "1.4" }}>{document.tieuDeTaiLieu}</span>
+                        <span style={{ fontSize: "12px", color: "#9ca3af", marginTop: "2px" }}>Xem chi tiết</span>
                       </div>
                     </a>
                   ))}
@@ -287,94 +272,80 @@ export function DoctorDetailPage() {
             </div>
           </div>
 
-          {/* ========================================= */}
-          {/* CỘT PHẢI (Vùng Phải - Đánh giá, Bình luận) */}
-          {/* ========================================= */}
-          <aside style={{ display: 'flex', flexDirection: 'column', gap: '20px', position: 'sticky', top: '24px' }}>
-            
-            {/* BẢNG ĐÁNH GIÁ & BÌNH LUẬN */}
-            <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
-              
-              {/* Box Tổng điểm */}
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px', backgroundColor: '#fffbeb', borderRadius: '12px', border: '1px solid #fde68a', marginBottom: '20px' }}>
-                <span style={{ fontSize: '14px', color: '#92400e', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '8px' }}>Đánh giá trung bình</span>
-                <strong style={{ fontSize: '40px', color: '#d97706', lineHeight: '1' }}>⭐ {rating?.soSaoTrungBinh?.toFixed?.(1) ?? "0.0"}</strong>
-                <span style={{ fontSize: '14px', color: '#b45309', marginTop: '8px' }}>Trên {rating?.tongDanhGia ?? 0} lượt đánh giá</span>
+          <aside style={{ display: "flex", flexDirection: "column", gap: "20px", position: "sticky", top: "24px" }}>
+            <div style={{ backgroundColor: "#ffffff", borderRadius: "16px", padding: "24px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "20px", backgroundColor: "#fffbeb", borderRadius: "12px", border: "1px solid #fde68a", marginBottom: "16px" }}>
+                <span style={{ fontSize: "14px", color: "#92400e", fontWeight: "bold", textTransform: "uppercase", marginBottom: "8px" }}>Đánh giá trung bình</span>
+                <strong style={{ fontSize: "40px", color: "#d97706", lineHeight: "1" }}>⭐ {rating?.soSaoTrungBinh?.toFixed?.(1) ?? "0.0"}</strong>
+                <span style={{ fontSize: "14px", color: "#b45309", marginTop: "8px" }}>Trên {rating?.tongDanhGia ?? 0} lượt đánh giá</span>
               </div>
 
-              {/* Header Nút Viết Đánh Giá */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '40px' }}>
-                <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#111827', margin: 0 }}>Bình luận gần đây</h3>
-                <button 
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+                <div>
+                  <h3 style={{ fontSize: "18px", fontWeight: "bold", color: "#111827", margin: 0 }}>Bình luận gần đây</h3>
+                  <p style={{ fontSize: "13px", color: "#6b7280", margin: "4px 0 0 0" }}>
+                    {maNguoiDung ? "Viết nhận xét khi bạn đã có lịch khám hoàn thành." : "Đăng nhập để để lại nhận xét."}
+                  </p>
+                </div>
+                <button
                   onClick={() => setIsWritingReview(!isWritingReview)}
-                  style={{ padding: '10px 18px', borderRadius: '8px', border: '1px solid #e5e7eb', backgroundColor: isWritingReview ? '#f3f4f6' : '#ffffff', color: '#374151', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer' }}
+                  style={{ padding: "10px 18px", borderRadius: "8px", border: "1px solid #e5e7eb", backgroundColor: isWritingReview ? "#f3f4f6" : "#ffffff", color: "#374151", fontSize: "13px", fontWeight: "bold", cursor: "pointer" }}
                 >
                   {isWritingReview ? "Hủy" : "✎ Viết đánh giá"}
                 </button>
               </div>
 
-              {/* Form Viết Đánh Giá */}
               {isWritingReview && (
-                <div style={{ backgroundColor: '#eff6ff', borderRadius: '12px', padding: '16px', marginBottom: '20px', border: '1px solid #bfdbfe' }}>
-                  <div style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontSize: '13px', color: '#374151', fontWeight: 'bold' }}>Chọn sao:</span>
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <button 
-                        key={star} 
-                        onClick={() => setRatingInput(star)}
-                        style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', padding: '0 2px', filter: star <= ratingInput ? 'none' : 'grayscale(100%) opacity(30%)' }}
-                      >⭐</button>
-                    ))}
+                <div style={{ backgroundColor: "#eff6ff", borderRadius: "12px", padding: "16px", marginBottom: "20px", border: "1px solid #bfdbfe" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", marginBottom: "10px" }}>
+                    <span style={{ fontSize: "13px", color: "#374151", fontWeight: "bold" }}>Chọn sao:</span>
+                    <div style={{ display: "flex", gap: 2 }}>
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <StarButton key={star} active={star <= ratingInput} onClick={() => setRatingInput(star)} />
+                      ))}
+                    </div>
                   </div>
-                  
-                  <textarea 
+
+                  <textarea
                     value={reviewTextInput}
                     onChange={(e) => setReviewTextInput(e.target.value)}
                     placeholder="Chia sẻ trải nghiệm của bạn..."
-                    rows={3}
-                    style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', resize: 'vertical', marginBottom: '12px' }}
+                    rows={4}
+                    style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "14px", resize: "vertical", marginBottom: "12px" }}
                   />
-                  
-                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                    <button 
+
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
+                    <span style={{ fontSize: 12, color: "#6b7280" }}>
+                      {canSubmitReview ? "Sẵn sàng gửi đánh giá." : "Hãy nhập nội dung đánh giá trước khi gửi."}
+                    </span>
+                    <button
                       onClick={handleSubmitReview}
-                      style={{ padding: '10px 20px', borderRadius: '10px', border: 'none', backgroundColor: '#3b82f6', color: '#ffffff', fontWeight: 'bold', cursor: 'pointer' }}
-                    >Gửi đánh giá</button>
+                      disabled={reviewMutation.isPending || !canSubmitReview}
+                      style={{ padding: "10px 20px", borderRadius: "10px", border: "none", backgroundColor: reviewMutation.isPending || !canSubmitReview ? "#93c5fd" : "#3b82f6", color: "#ffffff", fontWeight: "bold", cursor: reviewMutation.isPending || !canSubmitReview ? "not-allowed" : "pointer" }}
+                    >
+                      {reviewMutation.isPending ? "Đang gửi..." : "Gửi đánh giá"}
+                    </button>
                   </div>
                 </div>
               )}
 
-              {/* Danh sách bình luận */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxHeight: '500px', overflowY: 'auto', paddingRight: '4px' }}>
-                {reviewQuery.isLoading && <div style={{ fontSize: '14px', color: '#6b7280' }}>Đang tải...</div>}
-                {!reviewQuery.isLoading && (reviewQuery.data || []).length === 0 && (
-                  <div style={{ padding: '24px 16px', backgroundColor: '#f9fafb', borderRadius: '8px', textAlign: 'center', color: '#6b7280', fontSize: '14px' }}>
-                    Chưa có bình luận.
-                  </div>
-                )}
-                
-                {(reviewQuery.data || []).map((review) => (
-                  <div key={review.maDanhGia} style={{ padding: '16px', backgroundColor: '#f8fafc', borderRadius: '12px', border: '1px solid #f1f5f9' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <div style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 'bold', color: '#475569' }}>
-                          {review.hoTenNguoiDung.charAt(0).toUpperCase()}
-                        </div>
-                        <div>
-                          <strong style={{ fontSize: '14px', color: '#374151', display: 'block' }}>{review.hoTenNguoiDung}</strong>
-                          <span style={{ fontSize: '11px', color: '#9ca3af' }}>{new Date(review.thoiGian).toLocaleDateString('vi-VN')}</span>
-                        </div>
-                      </div>
-                      <span style={{ fontSize: '12px', color: '#d97706', fontWeight: 'bold' }}>⭐ {review.soSao}</span>
+              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                {(reviews || []).slice(0, 4).map((review) => (
+                  <div key={review.maDanhGia} style={{ border: "1px solid #e5e7eb", borderRadius: 14, padding: 14, background: "#fff" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 8 }}>
+                      <strong style={{ color: "#111827" }}>{review.hoTenNguoiDung}</strong>
+                      <span style={{ color: "#d97706", fontWeight: 700 }}>⭐ {review.soSao}</span>
                     </div>
-                    <p style={{ margin: '8px 0 0 0', fontSize: '14px', color: '#4b5563', lineHeight: '1.5' }}>
-                      {review.noiDung || <i style={{ color: '#9ca3af' }}>Người dùng không để lại nội dung.</i>}
-                    </p>
+                    <p style={{ margin: 0, color: "#4b5563", lineHeight: 1.6 }}>{review.noiDung || "Không có nội dung."}</p>
                   </div>
                 ))}
+                {(reviews || []).length === 0 ? (
+                  <div style={{ padding: 16, border: "1px dashed #d1d5db", borderRadius: 14, color: "#6b7280", textAlign: "center" }}>
+                    Chưa có bình luận nào.
+                  </div>
+                ) : null}
               </div>
             </div>
-
           </aside>
         </div>
       </div>

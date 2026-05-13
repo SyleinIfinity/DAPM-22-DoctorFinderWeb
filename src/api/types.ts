@@ -197,6 +197,7 @@ export type AppointmentSummary = {
   trieuChungGhiChu: string | null
   trangThaiPhieu: string
   lyDoTuChoi: string | null
+  coTheDanhGia: boolean
   ngayCuThe: string | null
   thuTrongTuan: number | null
   gioBatDau: string
@@ -231,6 +232,7 @@ export type AppointmentDetail = {
   maKhungGio: number
   thoiLuongPhut: number
   trangThaiLich: string
+  coTheDanhGia: boolean
 }
 
 export type AppointmentRequest = {
@@ -248,6 +250,15 @@ export type AppointmentRequest = {
   trieuChungGhiChu: string | null
   trangThaiPhieu: string
 }
+
+export type CreateReviewRequest = {
+  maNguoiDung: number
+  maBacSi: number
+  soSao: number
+  noiDung: string | null
+}
+
+export type CreateReviewResponse = Review
 
 export type UpgradeToDoctorResponse = {
   upgraded: boolean
@@ -267,6 +278,13 @@ export type Review = {
   soSao: number
   noiDung: string | null
   thoiGian: string
+}
+
+export type CreateReviewRequest = {
+  maNguoiDung: number
+  maBacSi: number
+  soSao: number
+  noiDung: string | null
 }
 
 export type RatingSummary = {
