@@ -188,6 +188,14 @@ export type WorkingSchedule = {
   chiTiet: WorkingScheduleSlot[]
 }
 
+export type DoctorScheduleCalendarDay = {
+  ngay: string
+  trangThai: 'CHUA_CO_LICH' | 'DA_TAO_LICH' | 'DA_CO_NGUOI_DAT' | 'NGAY_DA_QUA' | string
+  soLichLamViec: number
+  soChiTietLich: number
+  coNguoiDat: boolean
+}
+
 export type AppointmentSummary = {
   maPhieuDatLich: number
   maNguoiDung: number
@@ -360,7 +368,6 @@ export type AdminAccountAction = {
   ngayTao: string
 }
 
-/** Admin dashboard & báo cáo tìm kiếm / lượt xem hồ sơ bác sĩ */
 export type AdminDashboardOverview = {
   onlineAccounts: number
   totalMembers: number
@@ -388,7 +395,7 @@ export type AdminDoctorProfileTrafficReport = {
 export type AdminReportDoctorRank = {
   rank: number
   maBacSi: number
-  hoTenDayDu: string
+  hoTenDayTu: string
   count: number
 }
 

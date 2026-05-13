@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../api/http'
-import type { TimeSlot, WorkingSchedule, WorkingSlot } from '../../api/types'
+import type { DoctorScheduleCalendarDay, TimeSlot, WorkingSchedule, WorkingSlot } from '../../api/types'
 import { useAuth } from '../../auth/AuthContext'
 import { getApiErrorMessage } from '../../utils/errors'
 import {
@@ -21,8 +21,8 @@ type NoticeState = { tone: 'success' | 'danger'; title: string; description: str
 
 type DayState = 'empty' | 'green' | 'brown' | 'gray'
 type EditorMode = 'create' | 'edit' | 'add'
-type CreateApplyMode = 'day' | 'week' | 'month'
-type ExistingApplyMode = 'today' | 'forward'
+type CreateApplyMode = 'week' | 'month'
+type ExistingApplyMode = 'today' | 'next7' | 'forward'
 
 function todayYmd() {
   const now = new Date()
@@ -71,6 +71,22 @@ function listDatesUntilMonthEnd(baseDate: Date) {
   return result
 }
 
+function listDatesNext7Days(baseDate: Date) {
+  return Array.from({ length: 7 }, (_, index) => addDays(baseDate, index))
+    .map((date) => ymd(date))
+    .filter((date) => date >= todayYmd())
+}
+
+function listMonthDates(anchor: Date) {
+  const first = new Date(anchor.getFullYear(), anchor.getMonth(), 1)
+  const last = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0)
+  const result: string[] = []
+  for (let cursor = new Date(first); cursor <= last; cursor = addDays(cursor, 1)) {
+    result.push(ymd(cursor))
+  }
+  return result
+}
+
 export function DoctorSchedulePage() {
   const qc = useQueryClient()
   const { session } = useAuth()
@@ -79,7 +95,7 @@ export function DoctorSchedulePage() {
   const [monthAnchor, setMonthAnchor] = useState(() => new Date())
   const [detailDate, setDetailDate] = useState(todayYmd())
   const [editorMode, setEditorMode] = useState<EditorMode>('create')
-  const [createApplyMode, setCreateApplyMode] = useState<CreateApplyMode>('day')
+  const [createApplyMode, setCreateApplyMode] = useState<CreateApplyMode>('week')
   const [existingApplyMode, setExistingApplyMode] = useState<ExistingApplyMode>('today')
   const [gioBatDau, setGioBatDau] = useState('08:00')
   const [gioKetThuc, setGioKetThuc] = useState('11:00')
@@ -107,6 +123,21 @@ export function DoctorSchedulePage() {
     enabled: !!maBacSi && !!detailDate,
   })
 
+  const calendarQuery = useQuery({
+    queryKey: ['working-calendar', maBacSi, monthAnchor.getFullYear(), monthAnchor.getMonth()],
+    queryFn: async () => {
+      if (!maBacSi) return [] as DoctorScheduleCalendarDay[]
+      const fromDate = ymd(new Date(monthAnchor.getFullYear(), monthAnchor.getMonth(), 1))
+      const toDate = ymd(new Date(monthAnchor.getFullYear(), monthAnchor.getMonth() + 1, 0))
+      return (
+        await api.get<DoctorScheduleCalendarDay[]>(`/api/doctors/${maBacSi}/working-slots/calendar`, {
+          params: { fromDate, toDate },
+        })
+      ).data
+    },
+    enabled: !!maBacSi,
+  })
+
   const timeSlotOptions = timeSlotsQuery.data ?? []
   const slots = slotsQuery.data ?? []
   const hasAnySlot = slots.length > 0
@@ -125,16 +156,12 @@ export function DoctorSchedulePage() {
     const baseDate = new Date(detailDate)
 
     if (editorMode === 'create') {
-      if (createApplyMode === 'day') return [detailDate]
-      if (createApplyMode === 'week') {
-        return Array.from({ length: 7 }, (_, index) => addDays(baseDate, index))
-          .map((date) => ymd(date))
-          .filter((date) => date >= todayYmd())
-      }
+      if (createApplyMode === 'week') return listDatesNext7Days(baseDate)
       return listDatesUntilMonthEnd(baseDate)
     }
 
     if (existingApplyMode === 'today') return [detailDate]
+    if (existingApplyMode === 'next7') return listDatesNext7Days(baseDate)
     return listDatesUntilMonthEnd(baseDate)
   }
 
@@ -202,28 +229,33 @@ export function DoctorSchedulePage() {
   const estimatedSlots = duration > 0 ? Math.floor(sessionMinutes / duration) : 0
   const scheduleStatus = getScheduleStatusMeta(trangThaiLich)
 
-  const dayStateByDate = useMemo(() => {
+  const calendarStateByDate = useMemo(() => {
     const map = new Map<string, DayState>()
     const today = todayYmd()
     for (const day of monthGrid(monthAnchor)) {
       const key = ymd(day)
       map.set(key, key < today ? 'gray' : 'empty')
     }
+
+    for (const item of calendarQuery.data ?? []) {
+      const key = item.ngay
+      if (!key) continue
+      if (item.trangThai === 'NGAY_DA_QUA') map.set(key, 'gray')
+      else if (item.trangThai === 'DA_CO_NGUOI_DAT') map.set(key, 'brown')
+      else if (item.trangThai === 'DA_TAO_LICH') map.set(key, 'green')
+      else map.set(key, 'empty')
+    }
+
     for (const [key, state] of Object.entries(knownDayStates)) {
       map.set(key, state)
     }
-    for (const slot of slots) {
-      const key = slot.ngayCuThe ?? detailDate
-      if (slot.maPhieuDatLichHienTai) map.set(key, 'brown')
-      else if (slot.trangThaiLich === 'SAP_DIEN_RA' || slot.trangThaiLich === 'DANG_DIEN_RA') map.set(key, 'green')
-      else map.set(key, 'empty')
-    }
+
     return map
-  }, [detailDate, knownDayStates, monthAnchor, slots])
+  }, [calendarQuery.data, knownDayStates, monthAnchor])
 
   const calendarDays = monthGrid(monthAnchor)
   const selectedDaySlots = slots
-  const selectedDayState: DayState = isPastDay ? 'gray' : selectedDaySlots.length === 0 ? 'empty' : selectedDaySlots.some((slot) => slot.maPhieuDatLichHienTai) ? 'brown' : 'green'
+  const selectedDayState: DayState = calendarStateByDate.get(detailDate) ?? (isPastDay ? 'gray' : selectedDaySlots.length === 0 ? 'empty' : selectedDaySlots.some((slot) => slot.maPhieuDatLichHienTai) ? 'brown' : 'green')
   const selectedDayStateMeta =
     selectedDayState === 'gray'
       ? { label: 'Ngày đã qua', tone: 'neutral' as const }
@@ -234,7 +266,7 @@ export function DoctorSchedulePage() {
           : { label: 'Chưa có lịch', tone: 'info' as const }
 
   const applyModeLabel = editorMode === 'create' ? 'Áp dụng theo' : 'Áp dụng cho'
-  const submitLabel = editorMode === 'create' ? 'Tạo lịch' : editorMode === 'edit' ? 'Lưu chỉnh sửa lịch khám' : 'Thêm lịch làm việc'
+  const submitLabel = editorMode === 'create' ? 'Tạo lịch' : editorMode === 'edit' ? 'Lưu chỉnh sửa lịch' : 'Thêm lịch mới'
 
   return (
     <div className="doctor-page">
@@ -306,9 +338,10 @@ export function DoctorSchedulePage() {
                 ))}
                 {calendarDays.map((day) => {
                   const key = ymd(day)
-                  const state = dayStateByDate.get(key) ?? 'empty'
+                  const state = calendarStateByDate.get(key) ?? 'empty'
                   const isSelected = detailDate === key
                   const isToday = key === todayYmd()
+                  const label = state === 'brown' ? 'Đã có người đặt' : state === 'green' ? 'Đã tạo lịch' : state === 'gray' ? 'Ngày đã qua' : 'Chưa có lịch'
                   return (
                     <button
                       key={key}
@@ -317,7 +350,7 @@ export function DoctorSchedulePage() {
                       onClick={() => setDetailDate(key)}
                     >
                       <span className="doctor-calendar-day__date">{day.getDate()}</span>
-                      <span className="doctor-calendar-day__meta">{state === 'brown' ? 'Đã đặt' : state === 'green' ? 'Đã tạo' : state === 'gray' ? 'Đã qua' : 'Trống'}</span>
+                      <span className="doctor-calendar-day__meta">{label}</span>
                     </button>
                   )
                 })}
@@ -408,10 +441,10 @@ export function DoctorSchedulePage() {
               ) : (
                 <>
                   <button className={`doctor-button ${editorMode === 'edit' ? 'doctor-button--primary' : 'doctor-button--secondary'}`} type="button" onClick={() => setEditorMode('edit')} disabled={isPastDay}>
-                    Chỉnh sửa lịch khám
+                    Chỉnh sửa lịch
                   </button>
                   <button className={`doctor-button ${editorMode === 'add' ? 'doctor-button--primary' : 'doctor-button--secondary'}`} type="button" onClick={() => setEditorMode('add')} disabled={isPastDay}>
-                    Thêm lịch làm việc
+                    Thêm lịch mới
                   </button>
                 </>
               )}
@@ -432,14 +465,14 @@ export function DoctorSchedulePage() {
                     </label>
                     {editorMode === 'create' ? (
                       <select id="schedule-apply-mode" className="doctor-select" value={createApplyMode} onChange={(event) => setCreateApplyMode(event.target.value as CreateApplyMode)}>
-                        <option value="day">Theo ngày đã chọn</option>
-                        <option value="week">Theo tuần (7 ngày tới)</option>
-                        <option value="month">Theo tháng (đến hết tháng)</option>
+                        <option value="week">Cả tuần tới</option>
+                        <option value="month">Đến hết tháng</option>
                       </select>
                     ) : (
                       <select id="schedule-apply-mode" className="doctor-select" value={existingApplyMode} onChange={(event) => setExistingApplyMode(event.target.value as ExistingApplyMode)}>
-                        <option value="today">Chỉ hôm nay</option>
-                        <option value="forward">Hôm nay và các ngày phía sau</option>
+                        <option value="today">Chỉ ngày hôm nay</option>
+                        <option value="next7">7 ngày sau</option>
+                        <option value="forward">Tất cả ngày sau</option>
                       </select>
                     )}
                   </div>
