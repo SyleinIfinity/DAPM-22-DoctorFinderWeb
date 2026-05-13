@@ -280,13 +280,6 @@ export type Review = {
   thoiGian: string
 }
 
-export type CreateReviewRequest = {
-  maNguoiDung: number
-  maBacSi: number
-  soSao: number
-  noiDung: string | null
-}
-
 export type RatingSummary = {
   maBacSi: number
   tongDanhGia: number
