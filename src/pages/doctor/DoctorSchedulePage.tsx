@@ -20,7 +20,7 @@ import {
 type NoticeState = { tone: 'success' | 'danger'; title: string; description: string } | null
 
 type DayState = 'empty' | 'green' | 'brown' | 'gray'
-type EditorMode = 'create' | 'edit' | 'add'
+type EditorMode = 'create' | 'edit' | 'add' | 'delete'
 type CreateApplyMode = 'week' | 'month'
 type ExistingApplyMode = 'today' | 'next7' | 'forward'
 
@@ -165,13 +165,12 @@ export function DoctorSchedulePage() {
     setKnownDayStates((prev) => (prev[detailDate] === nextState ? prev : { ...prev, [detailDate]: nextState }))
   }, [detailDate, slots, slotsQuery.isError, slotsQuery.isLoading])
 
-  const upsertMutation = useMutation({
+  const saveMutation = useMutation({
     mutationFn: async () => {
       if (!maBacSi) throw new Error('Thiếu mã bác sĩ')
       const targetDates = getApplyDates()
       if (targetDates.length === 0) throw new Error('Không có ngày hợp lệ để cập nhật.')
 
-      const actionScope = editorMode === 'create' ? 'APPEND' : existingApplyMode === 'today' ? 'TODAY' : existingApplyMode === 'next7' ? 'NEXT_7_DAYS' : 'ALL_CREATED_DAYS'
       const items = targetDates.map((date) => ({
         thuTrongTuan: null,
         ngayCuThe: date,
@@ -180,14 +179,19 @@ export function DoctorSchedulePage() {
         maKhungGio,
         soLuongToiDa,
         trangThaiLich,
-        actionScope,
       }))
 
-      const res = await api.put<WorkingSchedule[]>(`/api/doctors/${maBacSi}/working-slots`, { items })
-      return { data: res.data, targetDates }
+      const method = editorMode === 'create' || editorMode === 'add' ? 'post' : 'put'
+      const res = await api[method]<WorkingSchedule[]>(`/api/doctors/${maBacSi}/working-slots`, { items })
+      return { data: res.data, targetDates, method }
     },
-    onSuccess: async ({ targetDates }) => {
-      const title = editorMode === 'create' ? 'Đã tạo lịch làm việc' : editorMode === 'edit' ? 'Đã chỉnh sửa lịch khám' : 'Đã thêm lịch làm việc'
+    onSuccess: async ({ targetDates, method }) => {
+      const title =
+        method === 'post'
+          ? editorMode === 'create'
+            ? 'Đã tạo lịch làm việc'
+            : 'Đã thêm lịch làm việc'
+          : 'Đã chỉnh sửa lịch làm việc'
       setNotice({
         tone: 'success',
         title,
@@ -201,11 +205,80 @@ export function DoctorSchedulePage() {
         return next
       })
       await qc.invalidateQueries({ queryKey: ['working-slots', maBacSi, detailDate] })
+      await qc.invalidateQueries({ queryKey: ['working-calendar', maBacSi, monthAnchor.getFullYear(), monthAnchor.getMonth()] })
     },
     onError: (err) =>
       setNotice({
         tone: 'danger',
         title: 'Không thể lưu lịch làm việc',
+        description: getApiErrorMessage(err),
+      }),
+  })
+
+  const deleteSelectedDayMutation = useMutation({
+    mutationFn: async () => {
+      if (!maBacSi) throw new Error('Thiếu mã bác sĩ')
+      const items = selectedDaySlots.map((slot) => ({
+        thuTrongTuan: slot.thuTrongTuan ?? null,
+        ngayCuThe: slot.ngayCuThe ?? detailDate,
+        gioBatDau: slot.gioBatDau,
+        gioKetThuc: slot.gioKetThuc,
+        maKhungGio: slot.maKhungGio,
+        soLuongToiDa: null,
+        trangThaiLich: slot.trangThaiLich,
+      }))
+      if (items.length === 0) throw new Error('Không có lịch để xóa.')
+      const res = await api.delete<void>(`/api/doctors/${maBacSi}/working-slots`, { data: { items } })
+      return res.data
+    },
+    onSuccess: async () => {
+      setNotice({
+        tone: 'success',
+        title: 'Đã xóa lịch ngày đang chọn',
+        description: 'Toàn bộ lịch của ngày đang chọn đã được xóa thành công.',
+      })
+      setKnownDayStates((prev) => ({ ...prev, [detailDate]: 'empty' }))
+      await qc.invalidateQueries({ queryKey: ['working-slots', maBacSi, detailDate] })
+      await qc.invalidateQueries({ queryKey: ['working-calendar', maBacSi, monthAnchor.getFullYear(), monthAnchor.getMonth()] })
+    },
+    onError: (err) =>
+      setNotice({
+        tone: 'danger',
+        title: 'Không thể xóa lịch làm việc',
+        description: getApiErrorMessage(err),
+      }),
+  })
+
+  const deleteSlotMutation = useMutation({
+    mutationFn: async (slot: WorkingSlot) => {
+      if (!maBacSi) throw new Error('Thiếu mã bác sĩ')
+      const items = [
+        {
+          thuTrongTuan: slot.thuTrongTuan ?? null,
+          ngayCuThe: slot.ngayCuThe ?? detailDate,
+          gioBatDau: slot.gioBatDau,
+          gioKetThuc: slot.gioKetThuc,
+          maKhungGio: slot.maKhungGio,
+          soLuongToiDa: null,
+          trangThaiLich: slot.trangThaiLich,
+        },
+      ]
+      const res = await api.delete<void>(`/api/doctors/${maBacSi}/working-slots`, { data: { items } })
+      return res.data
+    },
+    onSuccess: async () => {
+      setNotice({
+        tone: 'success',
+        title: 'Đã xóa khung giờ',
+        description: 'Khung giờ được xóa thành công.',
+      })
+      await qc.invalidateQueries({ queryKey: ['working-slots', maBacSi, detailDate] })
+      await qc.invalidateQueries({ queryKey: ['working-calendar', maBacSi, monthAnchor.getFullYear(), monthAnchor.getMonth()] })
+    },
+    onError: (err) =>
+      setNotice({
+        tone: 'danger',
+        title: 'Không thể xóa khung giờ',
         description: getApiErrorMessage(err),
       }),
   })
@@ -256,6 +329,7 @@ export function DoctorSchedulePage() {
 
   const applyModeLabel = editorMode === 'create' ? 'Áp dụng theo' : 'Áp dụng cho'
   const submitLabel = editorMode === 'create' ? 'Tạo lịch' : editorMode === 'edit' ? 'Lưu chỉnh sửa lịch' : 'Thêm lịch mới'
+  const canDelete = !isPastDay && selectedDaySlots.length > 0
 
   return (
     <div className="doctor-page">
@@ -398,6 +472,14 @@ export function DoctorSchedulePage() {
                             <div className="doctor-meta-item__value">{isPastDay ? 'Chỉ xem' : locked ? 'Có người đặt' : 'Có thể chỉnh sửa'}</div>
                           </div>
                         </div>
+
+                        {!isPastDay && !locked ? (
+                          <div className="doctor-button-row" style={{ marginTop: 12 }}>
+                            <button className="doctor-button doctor-button--danger" type="button" onClick={() => deleteSlotMutation.mutate(slot)} disabled={deleteSlotMutation.isPending}>
+                              {deleteSlotMutation.isPending ? 'Đang xóa khung giờ...' : 'Xóa khung giờ này'}
+                            </button>
+                          </div>
+                        ) : null}
                       </article>
                     )
                   })}
@@ -508,8 +590,11 @@ export function DoctorSchedulePage() {
                 </div>
 
                 <div className="doctor-button-row">
-                  <button className="doctor-button doctor-button--primary" type="button" disabled={upsertMutation.isPending || !maBacSi} onClick={() => upsertMutation.mutate()}>
-                    {upsertMutation.isPending ? 'Đang lưu lịch...' : submitLabel}
+                  <button className="doctor-button doctor-button--primary" type="button" disabled={saveMutation.isPending || !maBacSi} onClick={() => saveMutation.mutate()}>
+                    {saveMutation.isPending ? 'Đang lưu lịch...' : submitLabel}
+                  </button>
+                  <button className="doctor-button doctor-button--danger" type="button" disabled={!canDelete || deleteSelectedDayMutation.isPending || !maBacSi} onClick={() => deleteSelectedDayMutation.mutate()}>
+                    {deleteSelectedDayMutation.isPending ? 'Đang xóa...' : 'Xóa lịch ngày này'}
                   </button>
                 </div>
               </div>
