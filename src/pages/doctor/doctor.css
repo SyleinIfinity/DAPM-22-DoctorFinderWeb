@@ -835,6 +835,62 @@
   gap: 18px;
 }
 
+.doctor-schedule-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(380px, 1fr);
+  gap: 18px;
+  align-items: stretch;
+}
+
+.doctor-schedule-left {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 18px;
+  height: clamp(760px, calc(100svh - 190px), 980px);
+}
+
+.doctor-schedule-calendar-panel,
+.doctor-schedule-detail-panel,
+.doctor-schedule-editor-panel {
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.doctor-schedule-editor-panel {
+  height: clamp(760px, calc(100svh - 190px), 980px);
+}
+
+.doctor-schedule-calendar-body,
+.doctor-schedule-detail-body,
+.doctor-schedule-editor-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.doctor-schedule-editor-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.doctor-schedule-editor-body .doctor-note-card {
+  padding: 11px 13px;
+}
+
+.doctor-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.doctor-editor-actions .doctor-button {
+  flex: 1 1 180px;
+}
+
 .doctor-calendar-toolbar {
   display: flex;
   align-items: center;
@@ -1896,6 +1952,23 @@
   .doctor-details-grid,
   .doctor-metrics-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .doctor-schedule-layout {
+    grid-template-columns: 1fr;
+  }
+  .doctor-schedule-left {
+    height: auto;
+    grid-template-rows: auto auto;
+  }
+  .doctor-schedule-editor-panel {
+    height: auto;
+  }
+  .doctor-schedule-calendar-body,
+  .doctor-schedule-detail-body,
+  .doctor-schedule-editor-body {
+    max-height: none;
+    overflow: visible;
+    padding-right: 0;
   }
   .doctor-schedule-grid,
   .doctor-hero,
