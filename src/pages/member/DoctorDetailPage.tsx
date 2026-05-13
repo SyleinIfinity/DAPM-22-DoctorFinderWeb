@@ -4,6 +4,7 @@ import { PageHeader } from "../../components/PageHeader";
 import { api } from "../../api/http";
 import { useMemo, useState } from "react";
 import type {
+  AppointmentSummary,
   CreateReviewRequest,
   DoctorDocument,
   DoctorProfile,
@@ -68,6 +69,15 @@ export function DoctorDetailPage() {
     enabled: Number.isFinite(maBacSi) && maBacSi > 0,
   });
 
+  const appointmentsQuery = useQuery({
+    queryKey: ["member-appointments-for-review", session?.maNguoiDung],
+    queryFn: async () => {
+      if (!session?.maNguoiDung) return [] as AppointmentSummary[];
+      return (await api.get<AppointmentSummary[]>("/api/appointments", { params: { maNguoiDung: session.maNguoiDung, scope: "HISTORY" } })).data;
+    },
+    enabled: !!session?.maNguoiDung,
+  });
+
   const documentsQuery = useQuery({
     queryKey: ["doctor-documents-public", maBacSi],
     queryFn: async () => (await api.get<DoctorDocument[]>(`/api/doctors/${maBacSi}/documents`)).data,
@@ -123,6 +133,19 @@ export function DoctorDetailPage() {
   });
 
   const canSubmitReview = useMemo(() => !!maNguoiDung && reviewTextInput.trim().length > 0, [maNguoiDung, reviewTextInput]);
+  const canWriteReview = useMemo(() => (appointmentsQuery.data ?? []).some((appointment) => appointment.maBacSi === maBacSi && appointment.coTheDanhGia), [appointmentsQuery.data, maBacSi]);
+
+  const handleSubmitReview = () => {
+    if (!maNguoiDung) {
+      alert("Vui lòng đăng nhập để đánh giá!");
+      return;
+    }
+    if (!canWriteReview) {
+      alert("Bạn chưa có lịch khám hoàn thành nên chưa thể đánh giá.");
+      return;
+    }
+    reviewMutation.mutate();
+  };
 
   if (!Number.isFinite(maBacSi) || maBacSi <= 0) {
     return (
@@ -284,19 +307,31 @@ export function DoctorDetailPage() {
                 <div>
                   <h3 style={{ fontSize: "18px", fontWeight: "bold", color: "#111827", margin: 0 }}>Bình luận gần đây</h3>
                   <p style={{ fontSize: "13px", color: "#6b7280", margin: "4px 0 0 0" }}>
-                    {maNguoiDung ? "Viết nhận xét khi bạn đã có lịch khám hoàn thành." : "Đăng nhập để để lại nhận xét."}
+                    {maNguoiDung
+                      ? canWriteReview
+                        ? "Bạn đã có lịch khám hoàn thành và có thể để lại nhận xét."
+                        : "Bạn cần có lịch khám hoàn thành trước khi viết nhận xét."
+                      : "Đăng nhập để để lại nhận xét."}
                   </p>
                 </div>
                 <button
-                  onClick={() => setIsWritingReview(!isWritingReview)}
-                  style={{ padding: "10px 18px", borderRadius: "8px", border: "1px solid #e5e7eb", backgroundColor: isWritingReview ? "#f3f4f6" : "#ffffff", color: "#374151", fontSize: "13px", fontWeight: "bold", cursor: "pointer" }}
+                  onClick={() => {
+                    if (!canWriteReview) return;
+                    setIsWritingReview(true)
+                  }}
+                  style={{ padding: "10px 18px", borderRadius: "8px", border: "1px solid #e5e7eb", backgroundColor: canWriteReview ? (isWritingReview ? "#f3f4f6" : "#ffffff") : "#f8fafc", color: canWriteReview ? "#374151" : "#9ca3af", fontSize: "13px", fontWeight: "bold", cursor: canWriteReview ? "pointer" : "not-allowed" }}
                 >
-                  {isWritingReview ? "Hủy" : "✎ Viết đánh giá"}
+                  ✎ Viết đánh giá
                 </button>
               </div>
 
               {isWritingReview && (
-                <div style={{ backgroundColor: "#eff6ff", borderRadius: "12px", padding: "16px", marginBottom: "20px", border: "1px solid #bfdbfe" }}>
+                <div style={{ backgroundColor: "#eff6ff", borderRadius: "12px", padding: "16px", marginBottom: "20px", border: "1px solid #bfdbfe", opacity: canWriteReview ? 1 : 0.7 }}>
+                  {!canWriteReview ? (
+                    <div style={{ marginBottom: 12, padding: "10px 12px", borderRadius: 10, background: "#fff7ed", border: "1px solid #fed7aa", color: "#9a3412", fontSize: 13, fontWeight: 600 }}>
+                      Bạn cần có lịch khám hoàn thành trước khi gửi đánh giá.
+                    </div>
+                  ) : null}
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", marginBottom: "10px" }}>
                     <span style={{ fontSize: "13px", color: "#374151", fontWeight: "bold" }}>Chọn sao:</span>
                     <div style={{ display: "flex", gap: 2 }}>
@@ -316,12 +351,16 @@ export function DoctorDetailPage() {
 
                   <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
                     <span style={{ fontSize: 12, color: "#6b7280" }}>
-                      {canSubmitReview ? "Sẵn sàng gửi đánh giá." : "Hãy nhập nội dung đánh giá trước khi gửi."}
+                      {!canWriteReview
+                        ? "Bạn chưa có lịch khám hoàn thành để gửi đánh giá."
+                        : canSubmitReview
+                          ? "Sẵn sàng gửi đánh giá."
+                          : "Hãy nhập nội dung đánh giá trước khi gửi."}
                     </span>
                     <button
                       onClick={handleSubmitReview}
-                      disabled={reviewMutation.isPending || !canSubmitReview}
-                      style={{ padding: "10px 20px", borderRadius: "10px", border: "none", backgroundColor: reviewMutation.isPending || !canSubmitReview ? "#93c5fd" : "#3b82f6", color: "#ffffff", fontWeight: "bold", cursor: reviewMutation.isPending || !canSubmitReview ? "not-allowed" : "pointer" }}
+                      disabled={reviewMutation.isPending || !canSubmitReview || !canWriteReview}
+                      style={{ padding: "10px 20px", borderRadius: "10px", border: "none", backgroundColor: reviewMutation.isPending || !canSubmitReview || !canWriteReview ? "#93c5fd" : "#3b82f6", color: "#ffffff", fontWeight: "bold", cursor: reviewMutation.isPending || !canSubmitReview || !canWriteReview ? "not-allowed" : "pointer" }}
                     >
                       {reviewMutation.isPending ? "Đang gửi..." : "Gửi đánh giá"}
                     </button>
