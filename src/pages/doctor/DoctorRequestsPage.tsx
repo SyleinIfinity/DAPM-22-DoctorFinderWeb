@@ -24,7 +24,7 @@ type NoticeState = {
   description: string
 } | null
 
-type RequestTab = 'all' | 'pending' | 'approved' | 'rejected'
+type RequestTab = 'all' | 'pending' | 'confirmed' | 'completed' | 'history' | 'rejected'
 
 function isRejectedStatus(status: string) {
   return status === 'TU_CHOI' || status === 'DA_TU_CHOI' || status === 'DA_HUY'
@@ -34,18 +34,28 @@ function isCompletedStatus(status: string) {
   return status === 'DA_KHAM' || status === 'HOAN_THANH'
 }
 
-function isApprovedStatus(status: string) {
-  return status === 'DA_DUYET' || status === 'DA_XAC_NHAN' || isCompletedStatus(status)
+function isConfirmedStatus(status: string) {
+  return status === 'DA_XAC_NHAN'
+}
+
+function isPendingStatus(status: string) {
+  return status === 'CHO_XAC_NHAN'
+}
+
+function isHistoryStatus(status: string) {
+  return status === 'DA_XAC_NHAN' || isCompletedStatus(status) || isRejectedStatus(status)
 }
 
 function canMarkVisited(status: string) {
-  return status === 'DA_DUYET' || status === 'DA_XAC_NHAN'
+  return status === 'DA_XAC_NHAN'
 }
 
 const TAB_LABELS: Record<RequestTab, string> = {
   all: 'Tất cả',
   pending: 'Chờ xác nhận',
-  approved: 'Đã đồng ý',
+  confirmed: 'Đã xác nhận - chờ hẹn',
+  completed: 'Đã khám',
+  history: 'Lịch sử',
   rejected: 'Đã từ chối',
 }
 
@@ -59,17 +69,24 @@ function getDetailActionState(detail: AppointmentDetail | AppointmentRequest | n
     }
   }
 
-  if (canMarkVisited(detail.trangThaiPhieu)) {
+  if (detail.trangThaiPhieu === 'DA_XAC_NHAN') {
     return {
-      title: 'Lịch hẹn đã được xác nhận',
-      description: 'Sau khi hoàn tất buổi khám, bấm nút xác nhận để cập nhật trạng thái phiếu hẹn.',
+      title: 'Đã xác nhận - chờ hẹn',
+      description: 'Phiếu đã được bác sĩ duyệt. Khi bệnh nhân đã đến khám, bấm nút xác nhận đã khám.',
     }
   }
 
   if (isCompletedStatus(detail.trangThaiPhieu)) {
     return {
-      title: 'Phiếu hẹn đã hoàn tất',
-      description: 'Trạng thái này cho biết buổi khám đã diễn ra xong và không cần thao tác thêm.',
+      title: 'Đã khám',
+      description: 'Phiếu đã được xác nhận là đã gặp mặt để khám xong.',
+    }
+  }
+
+  if (isRejectedStatus(detail.trangThaiPhieu)) {
+    return {
+      title: 'Lịch sử',
+      description: 'Phiếu này đã được bác sĩ xử lý trước đó và chỉ còn xem lịch sử thao tác.',
     }
   }
 
@@ -100,8 +117,10 @@ export function DoctorRequestsPage() {
   const requests = query.data ?? []
 
   const tabFilteredRequests = useMemo(() => {
-    if (activeTab === 'pending') return requests.filter((request) => request.trangThaiPhieu === 'CHO_XAC_NHAN')
-    if (activeTab === 'approved') return requests.filter((request) => isApprovedStatus(request.trangThaiPhieu))
+    if (activeTab === 'pending') return requests.filter((request) => isPendingStatus(request.trangThaiPhieu))
+    if (activeTab === 'confirmed') return requests.filter((request) => isConfirmedStatus(request.trangThaiPhieu))
+    if (activeTab === 'completed') return requests.filter((request) => isCompletedStatus(request.trangThaiPhieu))
+    if (activeTab === 'history') return requests.filter((request) => isHistoryStatus(request.trangThaiPhieu))
     if (activeTab === 'rejected') return requests.filter((request) => isRejectedStatus(request.trangThaiPhieu))
     return requests
   }, [activeTab, requests])
@@ -153,8 +172,9 @@ export function DoctorRequestsPage() {
     enabled: typeof selectedRequestId === 'number' && selectedRequestId > 0,
   })
 
-  const pendingCount = useMemo(() => requests.filter((request) => request.trangThaiPhieu === 'CHO_XAC_NHAN').length, [requests])
-  const approvedCount = useMemo(() => requests.filter((request) => isApprovedStatus(request.trangThaiPhieu)).length, [requests])
+  const pendingCount = useMemo(() => requests.filter((request) => isPendingStatus(request.trangThaiPhieu)).length, [requests])
+  const confirmedCount = useMemo(() => requests.filter((request) => isConfirmedStatus(request.trangThaiPhieu)).length, [requests])
+  const completedCount = useMemo(() => requests.filter((request) => isCompletedStatus(request.trangThaiPhieu)).length, [requests])
   const rejectedCount = useMemo(() => requests.filter((request) => isRejectedStatus(request.trangThaiPhieu)).length, [requests])
 
   const approve = useMutation({
@@ -217,6 +237,8 @@ export function DoctorRequestsPage() {
   const selectedStatus = getAppointmentStatusMeta(currentStatus)
   const actionState = getDetailActionState(selectedDetail ?? selectedRequest)
   const isRejecting = rejectingId === selectedRequestId
+  const showCompleteButton = currentStatus === 'DA_XAC_NHAN'
+  const showApproveButton = currentStatus === 'CHO_XAC_NHAN'
 
   return (
     <div className="doctor-page">
@@ -238,9 +260,9 @@ export function DoctorRequestsPage() {
 
       <section className="doctor-metrics-grid doctor-metrics-grid--compact">
         <DoctorStatCard label="Tổng yêu cầu" value={String(requests.length)} hint="Toàn bộ phiếu hẹn đang có trong danh sách hiện tại." />
-        <DoctorStatCard label="Chờ xác nhận" value={String(pendingCount)} hint="Các phiếu cần phản hồi sớm để tránh chậm lịch." />
-        <DoctorStatCard label="Đã đồng ý" value={String(approvedCount)} hint="Bao gồm các lịch đã xác nhận và đang theo dõi khám." />
-        <DoctorStatCard label="Đã từ chối" value={String(rejectedCount)} hint="Các phiếu này đã đóng và có thể xem lại lý do xử lý." />
+        <DoctorStatCard label="Chờ xác nhận" value={String(pendingCount)} hint="Phiếu chưa được bác sĩ duyệt." />
+        <DoctorStatCard label="Đã xác nhận - chờ hẹn" value={String(confirmedCount)} hint="Phiếu đã được duyệt và đang chờ gặp mặt để khám." />
+        <DoctorStatCard label="Đã khám" value={String(completedCount)} hint="Phiếu đã được bác sĩ xác nhận là đã khám xong." />
       </section>
 
       <div className="doctor-request-workspace">
@@ -506,7 +528,7 @@ export function DoctorRequestsPage() {
                           </>
                         ) : null}
 
-                        {canMarkVisited(currentStatus) ? (
+                        {showCompleteButton ? (
                           <button
                             className="doctor-button doctor-button--primary"
                             type="button"
