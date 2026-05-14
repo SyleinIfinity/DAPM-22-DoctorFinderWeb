@@ -140,7 +140,7 @@ export function AdminReportsPage() {
         title: 'Xem trước: Top bác sĩ được xem',
         baseName: `admin-top-view-${fromDate}-to-${toDate}`,
         headers: ['rank', 'maBacSi', 'hoTenDayDu', 'count'],
-        rows: (topViewQuery.data || []).map((r) => [r.rank, r.maBacSi, r.hoTenDayDu, r.count]),
+        rows: (topViewQuery.data || []).map((r) => [r.rank, r.maBacSi, r.hoTenDayTu, r.count]),
       }
     }
 
@@ -149,7 +149,7 @@ export function AdminReportsPage() {
         title: 'Xem trước: Top bác sĩ được follow',
         baseName: `admin-top-follow-${fromDate}-to-${toDate}`,
         headers: ['rank', 'maBacSi', 'hoTenDayDu', 'count'],
-        rows: (topFollowQuery.data || []).map((r) => [r.rank, r.maBacSi, r.hoTenDayDu, r.count]),
+        rows: (topFollowQuery.data || []).map((r) => [r.rank, r.maBacSi, r.hoTenDayTu, r.count]),
       }
     }
 
@@ -450,7 +450,7 @@ export function AdminReportsPage() {
               {topViewQuery.isLoading ? <div className="muted">Đang tải…</div> : null}
               {(topViewQuery.data || []).map((r) => (
                 <div key={r.maBacSi} className="doctor-inline-between" style={{ marginTop: 8, fontSize: 13 }}>
-                  <span>#{r.rank} {r.hoTenDayDu}</span>
+                  <span>#{r.rank} {r.hoTenDayTu}</span>
                   <span className="doctor-chip">{r.count}</span>
                 </div>
               ))}
@@ -463,7 +463,7 @@ export function AdminReportsPage() {
               {topFollowQuery.isLoading ? <div className="muted">Đang tải…</div> : null}
               {(topFollowQuery.data || []).map((r) => (
                 <div key={r.maBacSi} className="doctor-inline-between" style={{ marginTop: 8, fontSize: 13 }}>
-                  <span>#{r.rank} {r.hoTenDayDu}</span>
+                  <span>#{r.rank} {r.hoTenDayTu}</span>
                   <span className="doctor-chip">{r.count}</span>
                 </div>
               ))}

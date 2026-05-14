@@ -870,6 +870,21 @@
   gap: 18px;
 }
 
+.doctor-request-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.doctor-request-search,
+.doctor-request-select {
+  min-height: 42px;
+}
+
+.doctor-request-search {
+  padding-right: 16px;
+}
+
 .doctor-request-list {
   display: flex;
   flex-direction: column;

@@ -86,6 +86,7 @@ export function DoctorRequestsPage() {
 
   const [notice, setNotice] = useState<NoticeState>(null)
   const [activeTab, setActiveTab] = useState<RequestTab>('all')
+  const [searchTerm, setSearchTerm] = useState('')
   const [selectedRequestId, setSelectedRequestId] = useState<number | null>(null)
   const [rejectingId, setRejectingId] = useState<number | null>(null)
   const [lyDoTuChoi, setLyDoTuChoi] = useState('')
@@ -98,12 +99,33 @@ export function DoctorRequestsPage() {
 
   const requests = query.data ?? []
 
-  const filteredRequests = useMemo(() => {
+  const tabFilteredRequests = useMemo(() => {
     if (activeTab === 'pending') return requests.filter((request) => request.trangThaiPhieu === 'CHO_XAC_NHAN')
     if (activeTab === 'approved') return requests.filter((request) => isApprovedStatus(request.trangThaiPhieu))
     if (activeTab === 'rejected') return requests.filter((request) => isRejectedStatus(request.trangThaiPhieu))
     return requests
   }, [activeTab, requests])
+
+  const filteredRequests = useMemo(() => {
+    const keyword = searchTerm.trim().toLowerCase()
+    if (!keyword) return tabFilteredRequests
+
+    return tabFilteredRequests.filter((request) => {
+      const searchTarget = [
+        request.maPhieuDatLich,
+        request.hoTenBenhNhan,
+        request.soDienThoaiBenhNhan,
+        request.emailBenhNhan,
+        request.loaiPhieu,
+        request.trieuChungGhiChu,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+
+      return searchTarget.includes(keyword)
+    })
+  }, [searchTerm, tabFilteredRequests])
 
   useEffect(() => {
     if (filteredRequests.length === 0) {
@@ -229,21 +251,42 @@ export function DoctorRequestsPage() {
           aside={<span className="doctor-count-bubble">{filteredRequests.length}</span>}
         >
           <div className="doctor-request-list-body">
-            <div className="doctor-tab-row">
-              {(Object.keys(TAB_LABELS) as RequestTab[]).map((tab) => (
-                <button
-                  key={tab}
-                  type="button"
-                  className={activeTab === tab ? 'doctor-button doctor-button--primary' : 'doctor-button doctor-button--secondary'}
-                  onClick={() => {
-                    setActiveTab(tab)
+            <div className="doctor-request-filters">
+              <div className="doctor-field">
+                <label className="doctor-label" htmlFor="request-search">
+                  Tìm kiếm nhanh
+                </label>
+                <input
+                  id="request-search"
+                  className="doctor-input doctor-request-search"
+                  type="search"
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                  placeholder="Tên, mã phiếu, số điện thoại, email..."
+                />
+              </div>
+
+              <div className="doctor-field">
+                <label className="doctor-label" htmlFor="request-filter">
+                  Lọc trạng thái
+                </label>
+                <select
+                  id="request-filter"
+                  className="doctor-select doctor-request-select"
+                  value={activeTab}
+                  onChange={(event) => {
+                    setActiveTab(event.target.value as RequestTab)
                     setRejectingId(null)
                     setLyDoTuChoi('')
                   }}
                 >
-                  {TAB_LABELS[tab]}
-                </button>
-              ))}
+                  {(Object.keys(TAB_LABELS) as RequestTab[]).map((tab) => (
+                    <option key={tab} value={tab}>
+                      {TAB_LABELS[tab]}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             {query.isLoading ? (
@@ -256,8 +299,12 @@ export function DoctorRequestsPage() {
 
             {!query.isLoading && !query.isError && filteredRequests.length === 0 ? (
               <DoctorEmptyState
-                title="Không có phiếu hẹn ở tab này"
-                description="Hãy chuyển sang nhóm khác để xem những phiếu đang chờ, đã duyệt hoặc đã từ chối."
+                title={searchTerm.trim() ? 'Không tìm thấy phiếu hẹn phù hợp' : 'Không có phiếu hẹn ở nhóm này'}
+                description={
+                  searchTerm.trim()
+                    ? 'Hãy thử từ khóa khác hoặc đổi lại bộ lọc trạng thái để mở rộng kết quả.'
+                    : 'Hãy chuyển sang nhóm khác để xem những phiếu đang chờ, đã duyệt hoặc đã từ chối.'
+                }
               />
             ) : null}
 
