@@ -188,6 +188,25 @@ export type WorkingSchedule = {
   chiTiet: WorkingScheduleSlot[]
 }
 
+export type WorkingSlotUpsertItem = {
+  thuTrongTuan: number | null
+  ngayCuThe: string | null
+  gioBatDau: string
+  gioKetThuc: string
+  maKhungGio: number
+  soLuongToiDa: number | null
+  trangThaiLich: string | null
+  actionScope?: 'APPEND' | 'REPLACE' | 'TODAY' | 'NEXT_7_DAYS' | 'ALL_CREATED_DAYS' | string | null
+}
+
+export type DoctorScheduleCalendarDay = {
+  ngay: string
+  trangThai: 'CHUA_CO_LICH' | 'DA_TAO_LICH' | 'DA_CO_NGUOI_DAT' | 'NGAY_DA_QUA' | string
+  soLichLamViec: number
+  soChiTietLich: number
+  coNguoiDat: boolean
+}
+
 export type AppointmentSummary = {
   maPhieuDatLich: number
   maNguoiDung: number
@@ -197,6 +216,7 @@ export type AppointmentSummary = {
   trieuChungGhiChu: string | null
   trangThaiPhieu: string
   lyDoTuChoi: string | null
+  coTheDanhGia: boolean
   ngayCuThe: string | null
   thuTrongTuan: number | null
   gioBatDau: string
@@ -231,6 +251,7 @@ export type AppointmentDetail = {
   maKhungGio: number
   thoiLuongPhut: number
   trangThaiLich: string
+  coTheDanhGia: boolean
 }
 
 export type AppointmentRequest = {
@@ -248,6 +269,15 @@ export type AppointmentRequest = {
   trieuChungGhiChu: string | null
   trangThaiPhieu: string
 }
+
+export type CreateReviewRequest = {
+  maNguoiDung: number
+  maBacSi: number
+  soSao: number
+  noiDung: string | null
+}
+
+export type CreateReviewResponse = Review
 
 export type UpgradeToDoctorResponse = {
   upgraded: boolean
@@ -349,7 +379,6 @@ export type AdminAccountAction = {
   ngayTao: string
 }
 
-/** Admin dashboard & báo cáo tìm kiếm / lượt xem hồ sơ bác sĩ */
 export type AdminDashboardOverview = {
   onlineAccounts: number
   totalMembers: number
@@ -377,7 +406,7 @@ export type AdminDoctorProfileTrafficReport = {
 export type AdminReportDoctorRank = {
   rank: number
   maBacSi: number
-  hoTenDayDu: string
+  hoTenDayTu: string
   count: number
 }
 

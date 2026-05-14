@@ -16,9 +16,10 @@ function normalizeTime(value: string | null): string {
 
 function getStatusStyles(status: string | null) {
   switch (status) {
-    case 'CHO_DUYET': return { color: '#FAAD14', bg: '#FFFBE6', border: '#FFE58F', label: 'Chờ duyệt' }
-    case 'DA_XAC_NHAN': return { color: '#13C2C2', bg: '#E6FFFB', border: '#87E8DE', label: 'Sắp tới' }
-    case 'THANH_CONG': return { color: '#52C41A', bg: '#F6FFED', border: '#B7EB8F', label: 'Hoàn thành' }
+    case 'CHO_XAC_NHAN': return { color: '#FAAD14', bg: '#FFFBE6', border: '#FFE58F', label: 'Chờ xác nhận' }
+    case 'DA_XAC_NHAN': return { color: '#13C2C2', bg: '#E6FFFB', border: '#87E8DE', label: 'Đã xác nhận' }
+    case 'DA_KHAM': return { color: '#52C41A', bg: '#F6FFED', border: '#B7EB8F', label: 'Đã khám' }
+    case 'DA_HUY': return { color: '#8C8C8C', bg: '#F5F5F5', border: '#D9D9D9', label: 'Đã hủy' }
     case 'TU_CHOI': return { color: '#FF4D4F', bg: '#FFF1F0', border: '#FFA39E', label: 'Đã từ chối' }
     default: return { color: '#8C8C8C', bg: '#F5F5F5', border: '#D9D9D9', label: 'Không xác định' }
   }
