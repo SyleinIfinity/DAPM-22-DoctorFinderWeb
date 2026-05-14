@@ -122,9 +122,12 @@ export function getAppointmentStatusMeta(
   switch (status) {
     case "CHO_XAC_NHAN":
       return { label: "Chờ xác nhận", tone: "warning" };
+    case "DA_DUYET":
+      return { label: "Đã đồng ý", tone: "success" };
     case "DA_XAC_NHAN":
-      return { label: "Đã xác nhận", tone: "success" };
+      return { label: "Đã xác nhận", tone: "info" };
     case "DA_KHAM":
+    case "HOAN_THANH":
       return { label: "Đã khám", tone: "success" };
     case "TU_CHOI":
       return { label: "Đã từ chối", tone: "danger" };
