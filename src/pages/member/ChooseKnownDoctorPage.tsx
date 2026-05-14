@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../../api/http'
-import type { AppointmentSummary } from '../../api/types'
+import type { AppointmentSummary, DoctorProfile, FollowedDoctor } from '../../api/types'
 import { useAuth } from '../../auth/AuthContext'
 import { PageHeader } from '../../components/PageHeader'
 import { getApiErrorMessage } from '../../utils/errors'
@@ -15,40 +15,20 @@ export function ChooseKnownDoctorPage() {
   const maNguoiDung = session?.maNguoiDung ?? null
   const [tab, setTab] = useState<SourceTab>('HISTORY')
 
-  // 1. QUERY DANH SÁCH THEO DÕI
+  // 1. QUERY DANH SÁCH THEO DÕI (API Thật)
   const followsQuery = useQuery({
     queryKey: ['follows', maNguoiDung],
     queryFn: async () => {
-      // --- COMMAND API THẬT ---
-      // return (await api.get<any[]>('/api/follows', { params: { maNguoiDung } })).data,
-
-      // --- MOCK DATA GIẢ LẬP ---
-      await new Promise(r => setTimeout(r, 500));
-      return [
-        { 
-          maBacSi: 20, 
-          hoTenBacSi: "BS. Lê Thị Tuyết", 
-          chuyenKhoa: "Nhi khoa", 
-          tenCoSoYTe: "Bệnh viện Nhi Đồng 1", 
-          diaChiLamViec: "Quận 10, TP.HCM" 
-        },
-        { 
-          maBacSi: 21, 
-          hoTenBacSi: "BS. Trần Văn B", 
-          chuyenKhoa: "Da liễu", 
-          tenCoSoYTe: "Phòng khám tư", 
-          diaChiLamViec: "Quận 3, TP.HCM" 
-        }
-      ];
+      if (!maNguoiDung) return [];
+      return (await api.get<FollowedDoctor[]>('/api/follows', { params: { maNguoiDung } })).data;
     },
-    enabled: true,
+    enabled: !!maNguoiDung,
   });
 
-  // 2. QUERY LỊCH HẸN SẮP TỚI
+  // 2. QUERY LỊCH HẸN SẮP TỚI (API Thật)
   const upcomingQuery = useQuery({
     queryKey: ['appointments', maNguoiDung, 'upcoming'],
     queryFn: async () => {
-       // Giả lập trả về mảng rỗng nếu chưa có API
        try {
          return (await api.get<AppointmentSummary[]>('/api/appointments', { params: { maNguoiDung, scope: 'upcoming' } })).data
        } catch (e) {
@@ -58,23 +38,20 @@ export function ChooseKnownDoctorPage() {
     enabled: !!maNguoiDung,
   })
 
-  // 3. QUERY LỊCH SỬ ĐẶT LỊCH
+  // 3. QUERY LỊCH SỬ ĐẶT LỊCH (API Thật)
   const historyQuery = useQuery({
     queryKey: ['appointments', maNguoiDung, 'history'],
     queryFn: async () => {
-      // --- COMMAND API THẬT ---
-      // return (await api.get<AppointmentSummary[]>('/api/appointments', { params: { maNguoiDung, scope: 'history' } })).data
-
-      // --- MOCK DATA GIẢ LẬP ---
-      await new Promise(r => setTimeout(r, 500));
-      return [
-        { maBacSi: 1, hoTenBacSi: "BS. Nguyễn Văn Nhân", chuyenKhoa: "Nội khoa", tenCoSoYTe: "BV Chợ Rẫy", diaChiLamViec: "Quận 5, TP.HCM" }
-      ];
+      try {
+        return (await api.get<AppointmentSummary[]>('/api/appointments', { params: { maNguoiDung, scope: 'history' } })).data
+      } catch (e) {
+        return []
+      }
     },
-    enabled: true,
+    enabled: !!maNguoiDung,
   })
 
-  // XỬ LÝ LỌC TRÙNG BÁC SĨ TỪ LỊCH SỬ (Upcoming + History)
+  // XỬ LÝ LỌC TRÙNG BÁC SĨ TỪ LỊCH SỬ
   const historyDoctors = useMemo(() => {
     const map = new Map<number, any>()
     const all = [...(upcomingQuery.data || []), ...(historyQuery.data || [])]
@@ -87,24 +64,34 @@ export function ChooseKnownDoctorPage() {
   }, [upcomingQuery.data, historyQuery.data])
 
   return (
-    <div style={{ backgroundColor: '#F8FAFB', minHeight: '100vh', paddingBottom: '40px' }}>
+    <main className="member-page-shell" style={{ minHeight: '100vh', paddingBottom: '40px' }}>
+      
+      {/* HEADER: Áp dụng style label/pill */}
       <PageHeader 
-        title="Bác sĩ quen thuộc" 
-        right={<Link to="/app/appointments" style={{ color: '#24D5DB', textDecoration: 'none', fontWeight: 'bold' }}>Lịch hẹn</Link>} 
+        title={
+            <span style={{ backgroundColor: '#eff6ff', color: '#1d4ed8', padding: '6px 20px', borderRadius: '24px', fontSize: '18px', fontWeight: 'bold', border: '1px solid #bfdbfe', display: 'inline-block' }}>
+              Bác sĩ quen thuộc
+            </span>
+        }
+        right={
+            <Link to="/app/appointments" style={{ backgroundColor: '#ffffff', color: '#4b5563', padding: '8px 16px', borderRadius: '24px', fontSize: '14px', border: '1px solid #d1d5db', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 'bold', boxShadow: '0 1px 2px rgba(0,0,0,0.05)', transition: 'all 0.2s' }}>
+                🗓 Lịch hẹn
+            </Link>
+        } 
       />
 
-      <div style={{ maxWidth: '800px', margin: '0 auto', padding: '20px' }}>
+      <div className="member-layout__page" style={{ maxWidth: '800px', margin: '0 auto', paddingTop: '20px' }}>
         
         {/* PILL TAB SWITCHER */}
-        <div style={{ display: 'flex', backgroundColor: '#E9ECEF', padding: '4px', borderRadius: '15px', marginBottom: '25px' }}>
+        <div style={{ display: 'flex', backgroundColor: '#e5e7eb', padding: '4px', borderRadius: '9999px', marginBottom: '32px', maxWidth: '500px', margin: '0 auto 32px auto' }}>
           <button 
             onClick={() => setTab('HISTORY')}
             style={{
-              flex: 1, padding: '12px', border: 'none', borderRadius: '12px', fontWeight: 'bold', fontSize: '13px',
-              backgroundColor: tab === 'HISTORY' ? '#fff' : 'transparent',
-              color: tab === 'HISTORY' ? '#1A1A1A' : '#6C757D',
-              boxShadow: tab === 'HISTORY' ? '0 4px 10px rgba(0,0,0,0.05)' : 'none',
-              cursor: 'pointer', transition: '0.3s'
+              flex: 1, padding: '10px 0', border: 'none', borderRadius: '9999px', fontWeight: 'bold', fontSize: '14px',
+              backgroundColor: tab === 'HISTORY' ? '#ffffff' : 'transparent',
+              color: tab === 'HISTORY' ? '#374151' : '#6b7280',
+              boxShadow: tab === 'HISTORY' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
+              cursor: 'pointer', transition: 'all 0.2s'
             }}
           >
             Lịch sử đã đặt
@@ -112,11 +99,11 @@ export function ChooseKnownDoctorPage() {
           <button 
             onClick={() => setTab('FOLLOWS')}
             style={{
-              flex: 1, padding: '12px', border: 'none', borderRadius: '12px', fontWeight: 'bold', fontSize: '13px',
-              backgroundColor: tab === 'FOLLOWS' ? '#fff' : 'transparent',
-              color: tab === 'FOLLOWS' ? '#1A1A1A' : '#6C757D',
-              boxShadow: tab === 'FOLLOWS' ? '0 4px 10px rgba(0,0,0,0.05)' : 'none',
-              cursor: 'pointer', transition: '0.3s'
+              flex: 1, padding: '10px 0', border: 'none', borderRadius: '9999px', fontWeight: 'bold', fontSize: '14px',
+              backgroundColor: tab === 'FOLLOWS' ? '#ffffff' : 'transparent',
+              color: tab === 'FOLLOWS' ? '#374151' : '#6b7280',
+              boxShadow: tab === 'FOLLOWS' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
+              cursor: 'pointer', transition: 'all 0.2s'
             }}
           >
             Đang theo dõi
@@ -125,75 +112,79 @@ export function ChooseKnownDoctorPage() {
 
         {/* HIỂN THỊ LỖI NẾU CÓ */}
         {(tab === 'HISTORY' && (upcomingQuery.isError || historyQuery.isError)) || (tab === 'FOLLOWS' && followsQuery.isError) ? (
-          <div style={{ backgroundColor: '#FFF1F0', border: '1px solid #FFA39E', padding: '15px', borderRadius: '15px', color: '#CF1322', marginBottom: '15px', fontSize: '14px' }}>
+          <div className="member-empty-state member-empty-state--error" style={{ marginBottom: '16px' }}>
             {getApiErrorMessage(upcomingQuery.error || historyQuery.error || followsQuery.error)}
           </div>
         ) : null}
 
         {/* DANH SÁCH BÁC SĨ */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+        <div className="member-doctor-list">
           {tab === 'HISTORY' ? (
             <>
               {historyDoctors.length === 0 && !historyQuery.isLoading && (
-                <div style={{ textAlign: 'center', padding: '40px', color: '#999', fontSize: '14px' }}>Chưa có bác sĩ nào trong lịch sử đặt.</div>
+                <div className="member-empty-state" style={{ textAlign: 'center' }}>Chưa có bác sĩ nào trong lịch sử đặt.</div>
               )}
               {historyDoctors.map((d) => <DoctorCard key={d.maBacSi} d={d} navigate={navigate} />)}
             </>
           ) : (
             <>
               {(followsQuery.data || []).length === 0 && !followsQuery.isLoading && (
-                <div style={{ textAlign: 'center', padding: '40px', color: '#999', fontSize: '14px' }}>Bạn chưa theo dõi bác sĩ nào.</div>
+                <div className="member-empty-state" style={{ textAlign: 'center' }}>Bạn chưa theo dõi bác sĩ nào.</div>
               )}
               {(followsQuery.data || []).map((f) => <DoctorCard key={f.maBacSi} d={f} navigate={navigate} />)}
             </>
           )}
         </div>
       </div>
-    </div>
+    </main>
   )
 }
 
-// COMPONENT CARD BÁC SĨ
+// COMPONENT CARD BÁC SĨ SỬ DỤNG CLASS CỦA KHÁNH (member-doctor-card)
 function DoctorCard({ d, navigate }: { d: any, navigate: any }) {
   const name = d.hoTenBacSi || d.hoTenDayDu || "Bác sĩ";
+  const avatarUrl = d.anhDaiDien ?? d.anhDaiDienBacSi ?? null;
   
   return (
-    <div style={{ 
-      display: 'flex', justifyContent: 'space-between', alignItems: 'center', 
-      padding: '18px 20px', backgroundColor: '#fff', borderRadius: '24px', 
-      boxShadow: '0 4px 12px rgba(0,0,0,0.03)', border: '1px solid #f1f3f5' 
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-        {/* Avatar chữ cái */}
-        <div style={{ 
-          width: '52px', height: '52px', borderRadius: '50%', backgroundColor: '#E6FFFA', 
-          display: 'grid', placeItems: 'center', color: '#0D9488', fontWeight: 'bold', fontSize: '18px' 
-        }}>
-          {name.split(' ').pop()?.charAt(0)}
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-          <div style={{ fontWeight: '800', fontSize: '16px', color: '#1A1A1A' }}>{name}</div>
-          <div style={{ fontSize: '13px', color: '#6C757D' }}>
-            <span style={{ fontWeight: 'bold', color: '#24D5DB' }}>{d.chuyenKhoa}</span> • {d.tenCoSoYTe}
-          </div>
-          <div style={{ fontSize: '12px', color: '#8C8C8C' }}>📍 {d.diaChiLamViec || '—'}</div>
-        </div>
+    <div 
+      className="member-doctor-card" 
+      onClick={() => navigate(`/app/doctors/${d.maBacSi}/slots`)}
+      style={{ borderLeft: '6px solid #2dd4bf' }} // Thêm điểm nhấn viền trái theo ý thích
+    >
+      
+      {/* 1. Avatar (Hiển thị ảnh nếu có, nếu không thì hiển thị chữ cái) */}
+      <div className="member-doctor-card__avatar">
+        {avatarUrl ? (
+           <img src={avatarUrl} alt={name} />
+        ) : (
+           <span style={{ color: '#0f766e', fontSize: '24px' }}>{name.replace('BS. ', '').charAt(0)}</span>
+        )}
       </div>
 
-      <button 
-        onClick={() => navigate(`/app/doctors/${d.maBacSi}/slots`)}
-        style={{ 
-          backgroundColor: '#24D5DB', color: '#fff', border: 'none', 
-          padding: '10px 22px', borderRadius: '12px', fontWeight: 'bold', 
-          fontSize: '13px', cursor: 'pointer', boxShadow: '0 4px 10px rgba(36, 213, 219, 0.2)',
-          transition: '0.2s'
-        }}
-        onMouseEnter={(e) => e.currentTarget.style.opacity = '0.8'}
-        onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
-      >
-        Chọn
-      </button>
+      {/* 2. Thông tin */}
+      <div className="member-doctor-card__body">
+        <h3 style={{ color: '#0f766e' }}>{name}</h3>
+        <p>
+          <span className="member-link" style={{ color: '#2dd4bf' }}>{d.chuyenKhoa}</span> • {d.tenCoSoYTe}
+        </p>
+        <p className="member-doctor-card__muted">
+          📍 {d.diaChiLamViec || 'Đang cập nhật'}
+        </p>
+      </div>
+
+      {/* 3. Nút bấm */}
+      <div className="member-doctor-card__cta">
+        <button 
+            className="btn btn-primary"
+            style={{ borderRadius: '9999px', backgroundColor: '#2dd4bf', padding: '8px 24px' }}
+            onClick={(e) => {
+                e.stopPropagation(); // Ngăn sự kiện click lan ra thẻ cha
+                navigate(`/app/doctors/${d.maBacSi}/slots`);
+            }}
+        >
+          Chọn
+        </button>
+      </div>
     </div>
   )
 }
