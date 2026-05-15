@@ -55,6 +55,7 @@ export type AccountDoctorInfo = {
   email: string
   cccd: string
   anhDaiDien: string | null
+  anhDaiDienPublicId: string | null
   coTaiKhoanBacSi: boolean
   maBacSi: number | null
   chuyenKhoa: string | null
@@ -80,6 +81,7 @@ export type DoctorProfile = {
   soDienThoai: string
   email: string
   anhDaiDien: string | null
+  anhDaiDienPublicId: string | null
   chuyenKhoa: string
   trinhDoChuyenMon: string
   loaiHinhBacSi: string
