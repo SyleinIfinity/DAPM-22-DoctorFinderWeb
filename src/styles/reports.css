@@ -68,6 +68,10 @@
   gap: 18px;
 }
 
+.reports-stat-grid--compact {
+  align-items: stretch;
+}
+
 .reports-stat-card,
 .reports-analytics-card,
 .reports-table-card,
@@ -137,6 +141,10 @@
   display: flex;
   align-items: center;
   gap: 16px;
+}
+
+.reports-featured-doctor--stacked {
+  align-items: flex-start;
 }
 
 .reports-featured-doctor__meta {
@@ -465,6 +473,30 @@
 
 .reports-chart-card {
   padding: 12px 12px 4px;
+}
+
+.reports-chart-card--sm {
+  height: 176px;
+  max-height: 176px;
+  overflow: hidden;
+}
+
+.reports-chart-card--wide {
+  height: 360px;
+  max-height: 360px;
+  overflow: hidden;
+}
+
+.reports-stat-card--chart-sm {
+  min-height: 240px;
+  max-height: 240px;
+  overflow: hidden;
+}
+
+.reports-stat-card--profile-sm {
+  min-height: 240px;
+  max-height: 240px;
+  overflow: hidden;
 }
 
 @media (max-width: 1200px) {

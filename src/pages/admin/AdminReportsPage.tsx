@@ -244,8 +244,8 @@ export function AdminReportsPage() {
           }
         />
 
-        <section className="reports-stat-grid">
-          <article className="reports-stat-card">
+        <section className="reports-stat-grid reports-stat-grid--compact">
+          <article className="reports-stat-card reports-stat-card--chart reports-stat-card--chart-sm">
             <div className="reports-stat-card__header">
               <div>
                 <div className="reports-stat-card__eyebrow">Tổng lượt ghé thăm website theo giờ</div>
@@ -253,21 +253,21 @@ export function AdminReportsPage() {
               </div>
               <div className="reports-stat-card__icon reports-stat-card__icon--blue">↗</div>
             </div>
-            <div className="reports-chart-card reports-chart-card--compact">
-              <ResponsiveContainer width="100%" height={180}>
-                <BarChart data={visitsByHour.map((value, idx) => ({ name: `${idx + 1}h`, value }))}>
-                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#64748b' }} />
-                  <YAxis tick={{ fontSize: 11, fill: '#64748b' }} />
+            <div className="reports-chart-card reports-chart-card--compact reports-chart-card--sm">
+              <ResponsiveContainer width="100%" height={128}>
+                <BarChart data={visitsByHour.map((value, idx) => ({ name: `${idx + 1}h`, value }))} margin={{ top: 0, right: 0, left: -10, bottom: 0 }}>
+                  <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#64748b' }} interval={0} />
+                  <YAxis tick={{ fontSize: 10, fill: '#64748b' }} width={28} />
                   <Tooltip />
-                  <Bar dataKey="value" radius={[8, 8, 0, 0]} fill="#2563eb" />
+                  <Bar dataKey="value" radius={[6, 6, 0, 0]} fill="#2563eb" />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           </article>
 
-          <article className="reports-stat-card reports-stat-card--featured">
-            <div className="reports-featured-doctor">
-              <DoctorAvatar name={featuredDoctor.doctorName} imageUrl={undefined} size={84} />
+          <article className="reports-stat-card reports-stat-card--featured reports-stat-card--profile-sm">
+            <div className="reports-featured-doctor reports-featured-doctor--stacked">
+              <DoctorAvatar name={featuredDoctor.doctorName} imageUrl={undefined} size={64} />
               <div className="reports-featured-doctor__meta">
                 <div className="reports-stat-card__eyebrow">Bác sĩ nổi bật hiện tại</div>
                 <div className="reports-featured-doctor__name">{featuredDoctor.doctorName}</div>
@@ -281,7 +281,7 @@ export function AdminReportsPage() {
             </div>
           </article>
 
-          <article className="reports-stat-card">
+          <article className="reports-stat-card reports-stat-card--chart reports-stat-card--chart-sm">
             <div className="reports-stat-card__header">
               <div>
                 <div className="reports-stat-card__eyebrow">Từ khóa được sử dụng nhiều nhất</div>
@@ -289,13 +289,13 @@ export function AdminReportsPage() {
               </div>
               <div className="reports-stat-card__icon reports-stat-card__icon--green">⌕</div>
             </div>
-            <div className="reports-chart-card reports-chart-card--compact">
-              <ResponsiveContainer width="100%" height={180}>
-                <BarChart data={topKeywords.map((k) => ({ keyword: k.keyword, count: k.count }))}>
-                  <XAxis dataKey="keyword" tick={{ fontSize: 11, fill: '#64748b' }} interval={0} angle={-15} textAnchor="end" height={60} />
-                  <YAxis tick={{ fontSize: 11, fill: '#64748b' }} />
+            <div className="reports-chart-card reports-chart-card--compact reports-chart-card--sm">
+              <ResponsiveContainer width="100%" height={128}>
+                <BarChart data={topKeywords.map((k) => ({ keyword: k.keyword, count: k.count }))} margin={{ top: 0, right: 0, left: -10, bottom: 0 }}>
+                  <XAxis dataKey="keyword" tick={{ fontSize: 10, fill: '#64748b' }} interval={0} angle={-15} textAnchor="end" height={44} />
+                  <YAxis tick={{ fontSize: 10, fill: '#64748b' }} width={28} />
                   <Tooltip />
-                  <Bar dataKey="count" radius={[8, 8, 0, 0]} fill="#2563eb" />
+                  <Bar dataKey="count" radius={[6, 6, 0, 0]} fill="#2563eb" />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -315,8 +315,8 @@ export function AdminReportsPage() {
             </div>
           </div>
 
-          <div className="reports-chart-card">
-            <ResponsiveContainer width="100%" height={420}>
+          <div className="reports-chart-card reports-chart-card--wide">
+            <ResponsiveContainer width="100%" height={320}>
               <BarChart data={chartRows} margin={{ top: 12, right: 16, left: 0, bottom: 40 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                 <XAxis dataKey="doctorName" tick={{ fontSize: 11, fill: '#475569' }} interval={0} angle={-20} textAnchor="end" height={60} />
