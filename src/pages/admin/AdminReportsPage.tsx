@@ -4,7 +4,6 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  Cell,
   Legend,
   ResponsiveContainer,
   Tooltip,
@@ -16,8 +15,7 @@ import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
 import { api } from '../../api/http'
 import type { AdminDoctorProfileTrafficReport, AdminReportDoctorRank, AdminReportKeyword } from '../../api/types'
-import { getApiErrorMessage } from '../../utils/errors'
-import { DoctorAvatar, DoctorNotice, DoctorPageHeading, DoctorPanel } from '../doctor/doctorUi'
+import { DoctorAvatar, DoctorPageHeading } from '../doctor/doctorUi'
 
 type SortKey = 'name' | 'visits' | 'follows' | 'rating' | 'rank'
 type SortOrder = 'asc' | 'desc'
@@ -45,7 +43,6 @@ function defaultRange() {
   return { from: fmt(from), to: fmt(to) }
 }
 
-const COLORS = ['#2563eb', '#22c55e', '#f59e0b', '#7c3aed', '#06b6d4', '#ef4444']
 
 function formatNumber(value: number) {
   return new Intl.NumberFormat('vi-VN').format(value)
@@ -79,9 +76,9 @@ function exportExcel(rows: DoctorRow[], fileName: string) {
   const worksheet = XLSX.utils.json_to_sheet(
     rows.map((row) => ({
       '#': row.rank,
-      Bác sĩ: row.doctorName,
-      Chuyên khoa: row.specialty,
-      Trạng thái: row.status,
+      'Bác sĩ': row.doctorName,
+      'Chuyên khoa': row.specialty,
+      'Trạng thái': row.status,
       'Lượt ghé thăm': row.visits,
       'Lượt follow': row.follows,
       'Đánh giá': row.rating.toFixed(1),
@@ -105,25 +102,6 @@ function exportPdf(rows: DoctorRow[], title: string, fileName: string) {
     alternateRowStyles: { fillColor: [248, 250, 252] },
   })
   doc.save(fileName)
-}
-
-function GroupedBarChart({ data }: { data: DoctorRow[] }) {
-  return (
-    <div className="reports-chart-card">
-      <ResponsiveContainer width="100%" height={420}>
-        <BarChart data={data} margin={{ top: 12, right: 16, left: 0, bottom: 40 }}>
-          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-          <XAxis dataKey="doctorName" tick={{ fontSize: 11, fill: '#475569' }} interval={0} angle={-20} textAnchor="end" height={60} />
-          <YAxis tick={{ fontSize: 11, fill: '#475569' }} />
-          <Tooltip contentStyle={{ borderRadius: 16, border: '1px solid #e2e8f0', boxShadow: '0 18px 40px rgba(15,23,42,0.12)' }} />
-          <Legend />
-          <Bar dataKey="visits" name="Lượt ghé thăm" radius={[8, 8, 0, 0]} fill="#2563eb" />
-          <Bar dataKey="follows" name="Lượt follow" radius={[8, 8, 0, 0]} fill="#22c55e" />
-          <Bar dataKey="rating" name="Đánh giá" radius={[8, 8, 0, 0]} fill="#f59e0b" />
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
-  )
 }
 
 export function AdminReportsPage() {
@@ -317,9 +295,7 @@ export function AdminReportsPage() {
                   <XAxis dataKey="keyword" tick={{ fontSize: 11, fill: '#64748b' }} interval={0} angle={-15} textAnchor="end" height={60} />
                   <YAxis tick={{ fontSize: 11, fill: '#64748b' }} />
                   <Tooltip />
-                  <Bar dataKey="count" radius={[8, 8, 0, 0]}>
-                    {topKeywords.map((_, idx) => <Cell key={idx} fill={COLORS[idx % COLORS.length]} />)}
-                  </Bar>
+                  <Bar dataKey="count" radius={[8, 8, 0, 0]} fill="#2563eb" />
                 </BarChart>
               </ResponsiveContainer>
             </div>
