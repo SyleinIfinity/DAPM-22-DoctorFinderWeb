@@ -177,7 +177,6 @@ type UserForm = {
   soDienThoai: string;
   email: string;
   cccd: string;
-  anhDaiDien: string;
 };
 
 const USER_FIELDS: Array<{ k: keyof UserForm; label: string }> = [
@@ -202,11 +201,11 @@ export function AccountPage() {
     soDienThoai: "",
     email: "",
     cccd: "",
-    anhDaiDien: "",
   });
   const [snapshot, setSnapshot] = useState<UserForm | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const memberAccountQuery = useQuery({
@@ -248,7 +247,6 @@ export function AccountPage() {
         soDienThoai: d.soDienThoai || "",
         email: d.email || "",
         cccd: d.cccd || "",
-        anhDaiDien: d.anhDaiDien || "",
       };
       setUserForm(next);
       setSnapshot(next);
@@ -269,11 +267,29 @@ export function AccountPage() {
     onError: (err) => alert(getApiErrorMessage(err)),
   });
 
+  const updateAvatarMutation = useMutation({
+    mutationFn: async () => {
+      if (!maNguoiDung) throw new Error("Thiếu maNguoiDung");
+      if (!avatarFile) return null;
+      const form = new FormData();
+      form.append("avatar", avatarFile);
+      return (await api.put(`/api/users/${maNguoiDung}/avatar`, form, { headers: { "Content-Type": "multipart/form-data" } })).data as AccountDoctorInfo;
+    },
+    onSuccess: async () => {
+      setAvatarPreview(null);
+      setAvatarFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      await qc.invalidateQueries({ queryKey: ["account", maTaiKhoan] });
+    },
+    onError: (err) => alert(getApiErrorMessage(err)),
+  });
+
   const fullName = useMemo(
     () => `${userForm.hoLot} ${userForm.ten}`.trim() || "Thành viên",
     [userForm.hoLot, userForm.ten],
   );
-  const avatarUrl = avatarPreview || userForm.anhDaiDien?.trim();
+  const currentAvatarUrl = (memberAccountQuery.data?.anhDaiDien || doctorProfileQuery.data?.anhDaiDien || "").trim();
+  const avatarUrl = avatarPreview || currentAvatarUrl;
 
   if (isDoctorContext) {
     const profile = doctorProfileQuery.data;
@@ -546,17 +562,9 @@ export function AccountPage() {
               accept="image/*"
               hidden
               onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) {
-                  const reader = new FileReader();
-                  reader.onload = () => {
-                    const res =
-                      typeof reader.result === "string" ? reader.result : "";
-                    setAvatarPreview(res);
-                    setUserForm((prev) => ({ ...prev, anhDaiDien: res }));
-                  };
-                  reader.readAsDataURL(file);
-                }
+                const file = e.target.files?.[0] ?? null;
+                setAvatarFile(file);
+                setAvatarPreview(file ? URL.createObjectURL(file) : null);
               }}
             />
 
@@ -607,6 +615,8 @@ export function AccountPage() {
                       setIsEditing(false);
                       if (snapshot) setUserForm(snapshot);
                       setAvatarPreview(null);
+                      setAvatarFile(null);
+                      if (fileInputRef.current) fileInputRef.current.value = "";
                     }}
                   >
                     Hủy
@@ -617,9 +627,16 @@ export function AccountPage() {
                   >
                     Lưu hồ sơ
                   </button>
+                  <button
+                    className="icon-btn"
+                    onClick={() => updateAvatarMutation.mutate()}
+                    disabled={!avatarFile || updateAvatarMutation.isPending}
+                  >
+                    {updateAvatarMutation.isPending ? "Đang cập nhật ảnh..." : "Lưu ảnh đại diện"}
+                  </button>
                 </div>
               ) : (
-                <button className="icon-btn" onClick={() => setIsEditing(true)}>
+                <button className="icon-btn" type="button" onClick={() => setIsEditing(true)}>
                   ✎ Chỉnh sửa
                 </button>
               )}
