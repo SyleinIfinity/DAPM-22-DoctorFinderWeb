@@ -273,7 +273,7 @@ export function AccountPage() {
       if (!avatarFile) return null;
       const form = new FormData();
       form.append("avatar", avatarFile);
-      return (await api.put(`/api/users/${maNguoiDung}/avatar`, form, { headers: { "Content-Type": "multipart/form-data" } })).data as AccountDoctorInfo;
+      return (await api.put(`/api/users/${maNguoiDung}/avatar`, form)).data as AccountDoctorInfo;
     },
     onSuccess: async () => {
       setAvatarPreview(null);
