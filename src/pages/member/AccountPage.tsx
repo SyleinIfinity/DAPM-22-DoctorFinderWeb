@@ -61,15 +61,18 @@ const STYLES = `
     width: 140px;
     height: 140px;
     margin: 0 auto 16px;
-    border-radius: 32px;
+    border-radius: 999px;
     overflow: hidden;
+    background: #f3f4f6;
+    box-shadow: 0 10px 20px rgba(15, 23, 42, 0.08);
   }
 
   .avatar-circle {
     width: 100%;
     height: 100%;
-    border-radius: 32px;
+    border-radius: 999px;
     object-fit: cover;
+    object-position: center center;
     border: 4px solid #f3f4f6;
     background: #f3f4f6;
     display: flex;
@@ -226,6 +229,24 @@ export function AccountPage() {
     enabled: !!maTaiKhoan && !isDoctorContext,
   });
 
+  const updateAvatarMutation = useMutation({
+    mutationFn: async () => {
+      if (!maNguoiDung) throw new Error("Thiếu maNguoiDung");
+      if (!avatarFile) return null;
+      const form = new FormData();
+      form.append("avatar", avatarFile);
+      return (await api.put(`/api/users/${maNguoiDung}/avatar`, form)).data as AccountDoctorInfo;
+    },
+    onSuccess: async () => {
+      setAvatarPreview(null);
+      setAvatarFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      await qc.invalidateQueries({ queryKey: ["account", maTaiKhoan] });
+      alert("Đã cập nhật ảnh đại diện!");
+    },
+    onError: (err) => alert(getApiErrorMessage(err)),
+  });
+
   const doctorProfileQuery = useQuery({
     queryKey: ["doctor-account-profile", maTaiKhoan],
     queryFn: async () =>
@@ -294,6 +315,7 @@ export function AccountPage() {
       setAvatarFile(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
       await qc.invalidateQueries({ queryKey: ["account", maTaiKhoan] });
+      alert("Đã cập nhật ảnh đại diện!");
     },
     onError: (err) => alert(getApiErrorMessage(err)),
   });
@@ -563,7 +585,7 @@ export function AccountPage() {
               onClick={() => isEditing && fileInputRef.current?.click()}
             >
               {avatarUrl ? (
-                <DoctorAvatar name={fullName} imageUrl={avatarUrl} />
+                <DoctorAvatar name={fullName} imageUrl={avatarUrl} size={140} />
               ) : (
                 <div className="avatar-circle">{createInitials(fullName)}</div>
               )}

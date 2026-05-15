@@ -283,9 +283,11 @@ export function DoctorEmptyState({
 export function DoctorAvatar({
   name,
   imageUrl,
+  size = 140,
 }: {
   name: string;
   imageUrl?: string | null;
+  size?: number;
 }) {
   const seed = encodeURIComponent(name || "doctor");
   const dicebear = `https://api.dicebear.com/9.x/initials/svg?seed=${seed}&backgroundColor=0e9e8a,0a6e62,1a6fa0&backgroundType=gradientLinear&fontSize=38&fontWeight=600`;
@@ -295,6 +297,7 @@ export function DoctorAvatar({
   return (
     <img
       className="doctor-avatar doctor-avatar--image"
+      style={{ width: size, height: size, objectFit: "cover", objectPosition: "center center" }}
       src={src}
       alt={name}
       onError={(e) => {
