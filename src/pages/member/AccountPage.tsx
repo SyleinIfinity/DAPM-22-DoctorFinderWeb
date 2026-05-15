@@ -229,24 +229,6 @@ export function AccountPage() {
     enabled: !!maTaiKhoan && !isDoctorContext,
   });
 
-  const updateAvatarMutation = useMutation({
-    mutationFn: async () => {
-      if (!maNguoiDung) throw new Error("Thiếu maNguoiDung");
-      if (!avatarFile) return null;
-      const form = new FormData();
-      form.append("avatar", avatarFile);
-      return (await api.put(`/api/users/${maNguoiDung}/avatar`, form)).data as AccountDoctorInfo;
-    },
-    onSuccess: async () => {
-      setAvatarPreview(null);
-      setAvatarFile(null);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-      await qc.invalidateQueries({ queryKey: ["account", maTaiKhoan] });
-      alert("Đã cập nhật ảnh đại diện!");
-    },
-    onError: (err) => alert(getApiErrorMessage(err)),
-  });
-
   const doctorProfileQuery = useQuery({
     queryKey: ["doctor-account-profile", maTaiKhoan],
     queryFn: async () =>
