@@ -20,6 +20,13 @@ import {
 } from "../doctor/doctorUi";
 import { getApiErrorMessage } from "../../utils/errors";
 
+function normalizeAvatarUrl(value?: string | null) {
+  const normalized = value?.trim();
+  if (!normalized) return null;
+  if (normalized.startsWith("data:")) return null;
+  return normalized;
+}
+
 const STYLES = `
   .account-wrapper {
     --brand-primary: #7c3aed;
@@ -253,6 +260,13 @@ export function AccountPage() {
     }
   }, [memberAccountQuery.data]);
 
+  useEffect(
+    () => () => {
+      if (avatarPreview?.startsWith("blob:")) URL.revokeObjectURL(avatarPreview);
+    },
+    [avatarPreview],
+  );
+
   const updateUserMutation = useMutation({
     mutationFn: async () => {
       if (!maNguoiDung) throw new Error("Thiếu maNguoiDung");
@@ -284,11 +298,22 @@ export function AccountPage() {
     onError: (err) => alert(getApiErrorMessage(err)),
   });
 
+  const handleAvatarSelect = (file: File | null) => {
+    setAvatarFile(file);
+    setAvatarPreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return file ? URL.createObjectURL(file) : null;
+    });
+  };
+
   const fullName = useMemo(
     () => `${userForm.hoLot} ${userForm.ten}`.trim() || "Thành viên",
     [userForm.hoLot, userForm.ten],
   );
-  const currentAvatarUrl = (memberAccountQuery.data?.anhDaiDien || doctorProfileQuery.data?.anhDaiDien || "").trim();
+  const currentAvatarUrl =
+    normalizeAvatarUrl(
+      memberAccountQuery.data?.anhDaiDien || doctorProfileQuery.data?.anhDaiDien,
+    ) || null;
   const avatarUrl = avatarPreview || currentAvatarUrl;
 
   if (isDoctorContext) {
@@ -538,7 +563,7 @@ export function AccountPage() {
               onClick={() => isEditing && fileInputRef.current?.click()}
             >
               {avatarUrl ? (
-                <img src={avatarUrl} className="avatar-circle" alt="avatar" />
+                <DoctorAvatar name={fullName} imageUrl={avatarUrl} />
               ) : (
                 <div className="avatar-circle">{createInitials(fullName)}</div>
               )}
@@ -563,8 +588,7 @@ export function AccountPage() {
               hidden
               onChange={(e) => {
                 const file = e.target.files?.[0] ?? null;
-                setAvatarFile(file);
-                setAvatarPreview(file ? URL.createObjectURL(file) : null);
+                handleAvatarSelect(file);
               }}
             />
 
@@ -614,8 +638,7 @@ export function AccountPage() {
                     onClick={() => {
                       setIsEditing(false);
                       if (snapshot) setUserForm(snapshot);
-                      setAvatarPreview(null);
-                      setAvatarFile(null);
+                      handleAvatarSelect(null);
                       if (fileInputRef.current) fileInputRef.current.value = "";
                     }}
                   >
