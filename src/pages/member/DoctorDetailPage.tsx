@@ -2,7 +2,7 @@ import { Link, useParams, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "../../components/PageHeader";
 import { api } from "../../api/http";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type {
   AppointmentSummary,
   CreateReviewRequest,
@@ -14,6 +14,7 @@ import type {
 } from "../../api/types";
 import { getApiErrorMessage } from "../../utils/errors";
 import { useAuth } from "../../auth/AuthContext";
+import { saveRecentDoctor } from "../../utils/recentDoctors";
 
 function StarButton({ active, onClick }: { active: boolean; onClick: () => void }) {
   return (
@@ -134,6 +135,21 @@ export function DoctorDetailPage() {
 
   const canSubmitReview = useMemo(() => !!maNguoiDung && reviewTextInput.trim().length > 0, [maNguoiDung, reviewTextInput]);
   const canWriteReview = useMemo(() => (appointmentsQuery.data ?? []).some((appointment) => appointment.maBacSi === maBacSi && appointment.coTheDanhGia), [appointmentsQuery.data, maBacSi]);
+
+  // Save to recent doctors when profile is loaded
+  useEffect(() => {
+    if (profileQuery.data) {
+      const doctor = profileQuery.data;
+      saveRecentDoctor({
+        maBacSi: doctor.maBacSi,
+        hoTenDayDu: doctor.hoTenDayDu,
+        chuyenKhoa: doctor.chuyenKhoa,
+        tenCoSoYTe: doctor.tenCoSoYTe,
+        diaChiLamViec: doctor.diaChiLamViec,
+        anhDaiDien: doctor.anhDaiDien,
+      });
+    }
+  }, [profileQuery.data]);
 
   const handleSubmitReview = () => {
     if (!maNguoiDung) {
