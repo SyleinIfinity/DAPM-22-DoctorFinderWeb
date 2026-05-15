@@ -19,7 +19,7 @@ import { DoctorAvatar, DoctorPageHeading } from '../doctor/doctorUi'
 
 type SortKey = 'name' | 'visits' | 'follows' | 'rating' | 'rank'
 type SortOrder = 'asc' | 'desc'
-type DoctorStatus = 'all' | 'active' | 'inactive' | 'pending' | 'approved' | 'rejected'
+type DoctorStatus = 'all' | 'approved' | 'pending' | 'inactive' | 'rejected'
 
 type DoctorRow = {
   id: number
@@ -54,7 +54,7 @@ function normalizeStatus(raw?: string | null): DoctorStatus {
   if (v.includes('reject')) return 'rejected'
   if (v.includes('pending') || v.includes('cho')) return 'pending'
   if (v.includes('inactive') || v.includes('lock')) return 'inactive'
-  return 'active'
+  return 'pending'
 }
 
 function exportCsv(rows: DoctorRow[], fileName: string) {
@@ -211,6 +211,10 @@ export function AdminReportsPage() {
 
   const topKeywords = (keywordsQuery.data || []).slice(0, 6)
   const featuredDoctor = doctorRows[0] || { id: 0, rank: 1, doctorName: 'BS. Nguyễn Văn An', specialty: 'Tim mạch', status: 'approved' as DoctorStatus, visits: 12560, follows: 3245, rating: 4.8 }
+  const totalDoctors = doctorRows.length
+  const selectedDoctors = doctorRows.filter((row) => (specialty === 'all' || row.specialty === specialty) && (status === 'all' || row.status === status)).length
+  const topKeywordLabel = topKeywords[0]?.keyword || 'Chưa có dữ liệu'
+  const topKeywordValue = topKeywords[0]?.count || 0
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -231,18 +235,26 @@ export function AdminReportsPage() {
   return (
     <div className="reports-page-shell">
       <div className="reports-page-shell__inner">
-        <DoctorPageHeading
-          eyebrow="Admin analytics"
-          title="HIỆU SUẤT BÁC SĨ"
-          description="Theo dõi lượt ghé thăm, follow và đánh giá của bác sĩ với dashboard hiện đại."
-          actions={
+        <header className="reports-hero-card">
+          <div className="reports-hero-card__content">
+            <div className="reports-kicker">Admin analytics</div>
+            <div>
+              <h1 className="reports-hero-card__title">HIỆU SUẤT BÁC SĨ</h1>
+              <p className="reports-hero-card__subtitle">Theo dõi lượt ghé thăm, follow và đánh giá của bác sĩ</p>
+            </div>
+          </div>
+
+          <div className="reports-hero-card__actions">
+            <div className="reports-date-range">
+              <span>01/05/2024 - 31/05/2024</span>
+            </div>
             <div className="reports-toolbar">
               <button type="button" className="reports-btn reports-btn--secondary" onClick={() => exportFiltered('csv')}>Xuất CSV</button>
               <button type="button" className="reports-btn reports-btn--secondary" onClick={() => exportFiltered('xlsx')}>Xuất Excel</button>
               <button type="button" className="reports-btn reports-btn--secondary" onClick={() => exportFiltered('pdf')}>Xuất PDF</button>
             </div>
-          }
-        />
+          </div>
+        </header>
 
         <section className="reports-stat-grid reports-stat-grid--compact">
           <article className="reports-stat-card reports-stat-card--chart reports-stat-card--chart-sm">
@@ -253,13 +265,14 @@ export function AdminReportsPage() {
               </div>
               <div className="reports-stat-card__icon reports-stat-card__icon--blue">↗</div>
             </div>
-            <div className="reports-chart-card reports-chart-card--compact reports-chart-card--sm">
-              <ResponsiveContainer width="100%" height={128}>
-                <BarChart data={visitsByHour.map((value, idx) => ({ name: `${idx + 1}h`, value }))} margin={{ top: 0, right: 0, left: -10, bottom: 0 }}>
-                  <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#64748b' }} interval={0} />
-                  <YAxis tick={{ fontSize: 10, fill: '#64748b' }} width={28} />
-                  <Tooltip />
-                  <Bar dataKey="value" radius={[6, 6, 0, 0]} fill="#2563eb" />
+            <div className="reports-chart-card reports-chart-card--compact reports-chart-card--sm reports-mini-chart-shell">
+              <ResponsiveContainer width="100%" height={148}>
+                <BarChart data={visitsByHour.map((value, idx) => ({ name: `${idx + 1}h`, value }))} margin={{ top: 8, right: 0, left: -10, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                  <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#64748b' }} interval={0} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: '#64748b' }} width={26} axisLine={false} tickLine={false} />
+                  <Tooltip cursor={{ fill: 'rgba(37, 99, 235, 0.06)' }} />
+                  <Bar dataKey="value" radius={[10, 10, 0, 0]} fill="url(#visitsGradient)" />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -267,7 +280,10 @@ export function AdminReportsPage() {
 
           <article className="reports-stat-card reports-stat-card--featured reports-stat-card--profile-sm">
             <div className="reports-featured-doctor reports-featured-doctor--stacked">
-              <DoctorAvatar name={featuredDoctor.doctorName} imageUrl={undefined} size={64} />
+              <div className="reports-avatar-wrap">
+                <DoctorAvatar name={featuredDoctor.doctorName} imageUrl={undefined} size={68} />
+                <span className="reports-verified-badge">✓</span>
+              </div>
               <div className="reports-featured-doctor__meta">
                 <div className="reports-stat-card__eyebrow">Bác sĩ nổi bật hiện tại</div>
                 <div className="reports-featured-doctor__name">{featuredDoctor.doctorName}</div>
@@ -289,55 +305,119 @@ export function AdminReportsPage() {
               </div>
               <div className="reports-stat-card__icon reports-stat-card__icon--green">⌕</div>
             </div>
-            <div className="reports-chart-card reports-chart-card--compact reports-chart-card--sm">
-              <ResponsiveContainer width="100%" height={128}>
-                <BarChart data={topKeywords.map((k) => ({ keyword: k.keyword, count: k.count }))} margin={{ top: 0, right: 0, left: -10, bottom: 0 }}>
-                  <XAxis dataKey="keyword" tick={{ fontSize: 10, fill: '#64748b' }} interval={0} angle={-15} textAnchor="end" height={44} />
-                  <YAxis tick={{ fontSize: 10, fill: '#64748b' }} width={28} />
-                  <Tooltip />
-                  <Bar dataKey="count" radius={[6, 6, 0, 0]} fill="#2563eb" />
+            <div className="reports-chart-card reports-chart-card--compact reports-chart-card--sm reports-mini-chart-shell">
+              <ResponsiveContainer width="100%" height={148}>
+                <BarChart data={topKeywords.map((k) => ({ keyword: k.keyword, count: k.count }))} margin={{ top: 8, right: 0, left: -10, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                  <XAxis dataKey="keyword" tick={{ fontSize: 10, fill: '#64748b' }} interval={0} angle={-15} textAnchor="end" height={42} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: '#64748b' }} width={26} axisLine={false} tickLine={false} />
+                  <Tooltip cursor={{ fill: 'rgba(34, 197, 94, 0.06)' }} />
+                  <Bar dataKey="count" radius={[10, 10, 0, 0]} fill="url(#keywordsGradient)" />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           </article>
         </section>
 
-        <section className="reports-analytics-card">
+        <section className="reports-analytics-card reports-main-analytics">
           <div className="reports-analytics-card__top">
             <div>
-              <div className="reports-section-title">Biểu đồ bác sĩ</div>
-              <div className="reports-section-subtitle">Grouped chart thật với Recharts, hỗ trợ sort/lọc/paging bên dưới.</div>
+              <div className="reports-section-title">Hiệu suất của bác sĩ</div>
+              <div className="reports-section-subtitle">So sánh lượt ghé thăm, follow và đánh giá của từng bác sĩ.</div>
             </div>
             <div className="reports-toolbar__range">
-              <input type="datetime-local" className="reports-input" value={from} onChange={(e) => setFrom(e.target.value)} />
-              <span className="reports-muted">→</span>
-              <input type="datetime-local" className="reports-input" value={to} onChange={(e) => setTo(e.target.value)} />
+              <span className="reports-muted">6 tháng gần đây</span>
+              <select className="reports-select">
+                <option>6 tháng gần đây</option>
+                <option>30 ngày gần đây</option>
+                <option>7 ngày gần đây</option>
+              </select>
             </div>
           </div>
 
-          <div className="reports-chart-card reports-chart-card--wide">
-            <ResponsiveContainer width="100%" height={320}>
-              <BarChart data={chartRows} margin={{ top: 12, right: 16, left: 0, bottom: 40 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                <XAxis dataKey="doctorName" tick={{ fontSize: 11, fill: '#475569' }} interval={0} angle={-20} textAnchor="end" height={60} />
-                <YAxis tick={{ fontSize: 11, fill: '#475569' }} />
-                <Tooltip contentStyle={{ borderRadius: 16, border: '1px solid #e2e8f0', boxShadow: '0 18px 40px rgba(15,23,42,0.12)' }} />
-                <Legend />
-                <Bar dataKey="visits" name="Lượt ghé thăm" radius={[8, 8, 0, 0]} fill="#2563eb" />
-                <Bar dataKey="follows" name="Lượt follow" radius={[8, 8, 0, 0]} fill="#22c55e" />
-                <Bar dataKey="rating" name="Đánh giá" radius={[8, 8, 0, 0]} fill="#f59e0b" />
-              </BarChart>
-            </ResponsiveContainer>
+          <div className="reports-analytics-layout">
+            <aside className="reports-sidebar">
+              <div className="reports-sidebar__search">
+                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Tìm kiếm bác sĩ..." />
+              </div>
+
+              <div className="reports-doctor-list">
+                {doctorRows.map((doctor) => {
+                  const selected = doctor.specialty === specialty || specialty === 'all'
+                  return (
+                    <button key={doctor.id} type="button" className={`reports-doctor-item ${selected ? 'is-selected' : ''}`} onClick={() => setSpecialty(doctor.specialty)}>
+                      <input type="checkbox" checked={selected} readOnly />
+                      <DoctorAvatar name={doctor.doctorName} imageUrl={undefined} size={44} />
+                      <div className="reports-doctor-item__meta">
+                        <div className="reports-doctor-item__name">{doctor.doctorName}</div>
+                        <div className="reports-doctor-item__specialty">{doctor.specialty}</div>
+                      </div>
+                      <div className="reports-doctor-item__chev">›</div>
+                    </button>
+                  )
+                })}
+              </div>
+
+              <div className="reports-sidebar__footer">
+                <div>Đã chọn {selectedDoctors} / {totalDoctors} bác sĩ</div>
+                <button type="button" className="reports-link-btn" onClick={() => { setSearch(''); setSpecialty('all'); setStatus('all') }}>Bỏ chọn tất cả</button>
+              </div>
+            </aside>
+
+            <main className="reports-main-chart">
+              <div className="reports-main-chart__header">
+                <div>
+                  <div className="reports-main-chart__title">Biểu đồ chỉ số bác sĩ</div>
+                  <div className="reports-main-chart__subtitle">Grouped Bar Chart theo visits / follow / rating.</div>
+                </div>
+                <select className="reports-select" value={ranking} onChange={(e) => setRanking(e.target.value as typeof ranking)}>
+                  <option value="all">Tất cả ranking</option>
+                  <option value="top10">Top 10</option>
+                  <option value="top20">Top 20</option>
+                </select>
+              </div>
+
+              {trafficQuery.isError ? null : null}
+
+              <div className="reports-chart-card reports-chart-card--wide reports-chart-card--main">
+                <ResponsiveContainer width="100%" height={340}>
+                  <BarChart data={chartRows} margin={{ top: 22, right: 16, left: 0, bottom: 12 }}>
+                    <defs>
+                      <linearGradient id="visitsGradient" x1="0" x2="0" y1="0" y2="1">
+                        <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.95" />
+                        <stop offset="100%" stopColor="#2563eb" stopOpacity="0.75" />
+                      </linearGradient>
+                      <linearGradient id="followGradient" x1="0" x2="0" y1="0" y2="1">
+                        <stop offset="0%" stopColor="#34d399" stopOpacity="0.95" />
+                        <stop offset="100%" stopColor="#16a34a" stopOpacity="0.8" />
+                      </linearGradient>
+                      <linearGradient id="ratingGradient" x1="0" x2="0" y1="0" y2="1">
+                        <stop offset="0%" stopColor="#fbbf24" stopOpacity="0.95" />
+                        <stop offset="100%" stopColor="#f59e0b" stopOpacity="0.85" />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <XAxis dataKey="doctorName" tick={{ fontSize: 11, fill: '#475569' }} interval={0} angle={-18} textAnchor="end" height={60} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 11, fill: '#475569' }} axisLine={false} tickLine={false} />
+                    <Tooltip contentStyle={{ borderRadius: 16, border: '1px solid #e2e8f0', boxShadow: '0 18px 40px rgba(15,23,42,0.12)' }} />
+                    <Legend wrapperStyle={{ paddingTop: 8 }} />
+                    <Bar dataKey="visits" name="Lượt ghé thăm" radius={[10, 10, 0, 0]} fill="url(#visitsGradient)" />
+                    <Bar dataKey="follows" name="Lượt follow" radius={[10, 10, 0, 0]} fill="url(#followGradient)" />
+                    <Bar dataKey="rating" name="Đánh giá" radius={[10, 10, 0, 0]} fill="url(#ratingGradient)" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </main>
           </div>
         </section>
 
         <section className="reports-table-card">
-          <div className="reports-table-card__header">
+          <div className="reports-table-card__header reports-table-card__header--stacked">
             <div>
               <div className="reports-section-title">Bảng dữ liệu bác sĩ</div>
               <div className="reports-section-subtitle">Có sorting, pagination và export Excel/PDF/CSV.</div>
             </div>
-            <div className="reports-table-actions">
+            <div className="reports-table-toolbar">
               <input className="reports-input" placeholder="Tìm bác sĩ..." value={search} onChange={(e) => setSearch(e.target.value)} />
               <select className="reports-select" value={specialty} onChange={(e) => setSpecialty(e.target.value)}>
                 <option value="all">Tất cả chuyên khoa</option>
@@ -345,9 +425,10 @@ export function AdminReportsPage() {
               </select>
               <select className="reports-select" value={status} onChange={(e) => setStatus(e.target.value as DoctorStatus)}>
                 <option value="all">Tất cả trạng thái</option>
-                <option value="active">Active</option>
+                <option value="approved">Approved</option>
                 <option value="pending">Pending</option>
                 <option value="inactive">Inactive</option>
+                <option value="rejected">Rejected</option>
               </select>
               <select className="reports-select" value={ranking} onChange={(e) => setRanking(e.target.value as typeof ranking)}>
                 <option value="all">Tất cả ranking</option>
@@ -355,6 +436,7 @@ export function AdminReportsPage() {
                 <option value="top20">Top 20</option>
               </select>
               <select className="reports-select" value={sortKey} onChange={(e) => handleSort(e.target.value as SortKey)}>
+                <option value="rank">Sort theo STT</option>
                 <option value="visits">Sort theo visits</option>
                 <option value="follows">Sort theo follows</option>
                 <option value="rating">Sort theo rating</option>
@@ -370,39 +452,47 @@ export function AdminReportsPage() {
             <table className="reports-table">
               <thead>
                 <tr>
+                  <th style={{ width: 34 }}><input type="checkbox" readOnly /></th>
+                  <th><button className="reports-th-btn" onClick={() => handleSort('rank')}>STT</button></th>
                   <th>Bác sĩ</th>
-                  <th>
-                    <button className="reports-th-btn" onClick={() => handleSort('visits')}>Lượt ghé thăm</button>
-                  </th>
-                  <th>
-                    <button className="reports-th-btn" onClick={() => handleSort('follows')}>Lượt follow</button>
-                  </th>
-                  <th>
-                    <button className="reports-th-btn" onClick={() => handleSort('rating')}>Đánh giá</button>
-                  </th>
-                  <th>Chuyên khoa</th>
-                  <th>Trạng thái</th>
+                  <th><button className="reports-th-btn" onClick={() => handleSort('visits')}>Lượt ghé thăm</button></th>
+                  <th><button className="reports-th-btn" onClick={() => handleSort('follows')}>Lượt follow</button></th>
+                  <th><button className="reports-th-btn" onClick={() => handleSort('rating')}>Sao đánh giá</button></th>
+                  <th>Xu hướng</th>
                 </tr>
               </thead>
               <tbody>
-                {pagedRows.map((doctor) => (
+                {pagedRows.map((doctor, idx) => (
                   <tr key={doctor.id}>
+                    <td><input type="checkbox" readOnly /></td>
+                    <td>{(safePage - 1) * pageSize + idx + 1}</td>
                     <td>
                       <div className="reports-table-doctor">
                         <DoctorAvatar name={doctor.doctorName} imageUrl={undefined} size={40} />
                         <div>
                           <div className="reports-table-doctor__name">{doctor.doctorName}</div>
-                          <div className="reports-table-doctor__specialty">ID #{doctor.id}</div>
+                          <div className="reports-table-doctor__specialty">{doctor.specialty}</div>
                         </div>
                       </div>
                     </td>
-                    <td>{formatNumber(doctor.visits)}</td>
-                    <td>{formatNumber(doctor.follows)}</td>
-                    <td>{doctor.rating.toFixed(1)} / 5</td>
-                    <td>{doctor.specialty}</td>
                     <td>
-                      <span className={`reports-status reports-status--${doctor.status}`}>
-                        {doctor.status}
+                      <div className="reports-metric-cell">
+                        <strong>{formatNumber(doctor.visits)}</strong>
+                        <div className="reports-progress"><span style={{ width: `${Math.min(100, (doctor.visits / 15000) * 100)}%` }} /></div>
+                      </div>
+                    </td>
+                    <td>
+                      <div className="reports-metric-cell">
+                        <strong>{formatNumber(doctor.follows)}</strong>
+                        <div className="reports-progress reports-progress--green"><span style={{ width: `${Math.min(100, (doctor.follows / 5000) * 100)}%` }} /></div>
+                      </div>
+                    </td>
+                    <td>
+                      <div className="reports-rating-cell">★ {doctor.rating.toFixed(1)} / 5</div>
+                    </td>
+                    <td>
+                      <span className={`reports-trend ${idx % 3 === 0 ? 'is-up' : 'is-down'}`}>
+                        {idx % 3 === 0 ? '↑ +12.5%' : '↓ -2.1%'}
                       </span>
                     </td>
                   </tr>
