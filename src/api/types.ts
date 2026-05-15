@@ -408,7 +408,9 @@ export type AdminDoctorProfileTrafficReport = {
 export type AdminReportDoctorRank = {
   rank: number
   maBacSi: number
-  hoTenDayTu: string
+  hoTenDayDu: string
+  chuyenKhoa: string
+  trangThaiHoSo: string
   count: number
 }
 
