@@ -302,7 +302,7 @@ export function AdminReportsPage() {
   const [activeDoctorId, setActiveDoctorId] = useState<number | null>(null)
   const [chartPeriod, setChartPeriod] = useState<ChartPeriod>('6months')
   const [page, setPage] = useState(1)
-  const [pdfPreview, setPdfPreview] = useState<{ rows: DoctorRow[]; fileName: string; url: string } | null>(null)
+  const [pdfPreview, setPdfPreview] = useState<{ rows: DoctorRow[]; fileName: string } | null>(null)
   const pageSize = 7
 
   const params = useMemo(
@@ -455,7 +455,6 @@ export function AdminReportsPage() {
     setPdfPreview({
       rows: sortedRows,
       fileName: `doctor-performance-${from}-to-${to}.pdf`,
-      open: true,
     })
   }
 
@@ -474,6 +473,10 @@ export function AdminReportsPage() {
     if (!pdfPreview) return
     const doc = createPdf(pdfPreview.rows)
     doc.save(pdfPreview.fileName)
+    setPdfPreview(null)
+  }
+
+  const cancelPdfExport = () => {
     setPdfPreview(null)
   }
 
@@ -778,6 +781,30 @@ export function AdminReportsPage() {
                 </div>
               </div>
           </section>
+
+          {pdfPreview ? (
+            <div className="reports-modal-backdrop" role="presentation" onClick={cancelPdfExport}>
+              <div className="reports-modal" role="dialog" aria-modal="true" aria-labelledby="pdf-preview-title" onClick={(event) => event.stopPropagation()}>
+                <div className="reports-modal__header">
+                  <div>
+                    <h3 id="pdf-preview-title">Xác nhận xuất PDF</h3>
+                    <p>Kiểm tra lại báo cáo trước khi tải file về máy.</p>
+                  </div>
+                  <button type="button" className="reports-icon-btn" onClick={cancelPdfExport} aria-label="Đóng">
+                    ×
+                  </button>
+                </div>
+                <div className="reports-modal__body">
+                  <p className="reports-modal__note">File: {pdfPreview.fileName}</p>
+                  <p className="reports-modal__note">Số dòng: {pdfPreview.rows.length}</p>
+                  <div className="reports-modal__actions">
+                    <button type="button" className="reports-btn reports-btn--secondary" onClick={cancelPdfExport}>Hủy</button>
+                    <button type="button" className="reports-btn reports-btn--primary" onClick={confirmPdfExport}>Xác nhận xuất</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
     </div>
