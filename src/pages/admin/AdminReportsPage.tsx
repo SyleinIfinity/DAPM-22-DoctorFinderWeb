@@ -2,9 +2,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import * as XLSX from 'xlsx'
-import { jsPDF } from 'jspdf'
-import autoTable from 'jspdf-autotable'
-import robotoFontUrl from '../../assets/fonts/Roboto-Variable.ttf?url'
+import pdfMake from 'pdfmake/build/pdfmake'
+import type { TDocumentDefinitions } from 'pdfmake/interfaces'
+import dejavusansRegular from '../../assets/fonts/DejaVuSerif.ttf?url'
+import dejavusansBold from '../../assets/fonts/DejaVuSerif-Bold.ttf?url'
+import dejavusansItalic from '../../assets/fonts/DejaVuSerif-Italic.ttf?url'
+import dejavusansBoldItalic from '../../assets/fonts/DejaVuSerif-BoldItalic.ttf?url'
 import { api } from '../../api/http'
 import type { AdminReportDoctorRank, DoctorRatingSummary } from '../../api/types'
 import { DoctorAvatar } from '../doctor/doctorUi'
@@ -26,6 +29,15 @@ type DoctorRow = {
 }
 
 type ChartPeriod = '6months' | '30days' | '7days'
+
+pdfMake.fonts = {
+  DejaVuSerif: {
+    normal: dejavusansRegular,
+    bold: dejavusansBold,
+    italics: dejavusansItalic,
+    bolditalics: dejavusansBoldItalic,
+  },
+}
 
 function defaultRange() {
   const to = new Date()
@@ -87,103 +99,86 @@ function exportExcel(rows: DoctorRow[], fileName: string) {
 }
 
 function createPdf(rows: DoctorRow[]) {
-  const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' })
-  const pageWidth = doc.internal.pageSize.getWidth()
-  const pageHeight = doc.internal.pageSize.getHeight()
-  const marginX = 40
-  const accentBlue = [31, 111, 255] as const
-  const accentGreen = [23, 178, 106] as const
-  const accentAmber = [245, 158, 11] as const
-  const softBlue = [235, 244, 255] as const
-  const softGreen = [233, 250, 242] as const
-  const softAmber = [255, 248, 230] as const
-  const fontFamily = 'helvetica'
+  const body = [
+    [
+      { text: '#', style: 'tableHeader', alignment: 'center' },
+      { text: 'Bác sĩ', style: 'tableHeader' },
+      { text: 'Chuyên khoa', style: 'tableHeader' },
+      { text: 'Lượt ghé thăm', style: 'tableHeader', alignment: 'right' },
+      { text: 'Lượt follow', style: 'tableHeader', alignment: 'right' },
+      { text: 'Đánh giá', style: 'tableHeader', alignment: 'right' },
+      { text: 'Xu hướng', style: 'tableHeader', alignment: 'right' },
+    ],
+    ...rows.map((row) => [
+      { text: String(row.rank), alignment: 'center' },
+      { text: row.doctorName },
+      { text: row.specialty },
+      { text: formatNumber(row.visits), alignment: 'right' },
+      { text: formatNumber(row.follows), alignment: 'right' },
+      { text: `${row.rating.toFixed(1)} / 5`, alignment: 'right' },
+      { text: `${row.trend >= 0 ? '+' : ''}${row.trend.toFixed(1)}%`, alignment: 'right' },
+    ]),
+  ]
 
   const totalVisits = rows.reduce((sum, row) => sum + row.visits, 0)
   const totalFollows = rows.reduce((sum, row) => sum + row.follows, 0)
   const averageRating = rows.length > 0 ? rows.reduce((sum, row) => sum + row.rating, 0) / rows.length : 0
 
-  doc.setFillColor(...accentBlue)
-  doc.rect(0, 0, pageWidth, 74, 'F')
-  doc.setTextColor(255, 255, 255)
-  doc.setFont(fontFamily, 'bold')
-  doc.setFontSize(20)
-  doc.text('Báo cáo hiệu suất bác sĩ', marginX, 32)
-  doc.setFont(fontFamily, 'normal')
-  doc.setFontSize(10)
-  doc.text(`Tạo lúc ${new Date().toLocaleString('vi-VN')}`, marginX, 52)
-
-  const cardY = 94
-  const cardH = 62
-  const cardGap = 14
-  const cardW = (pageWidth - marginX * 2 - cardGap * 2) / 3
-
-  const drawCard = (x: number, title: string, value: string, subtitle: string, fill: readonly number[]) => {
-    doc.setFillColor(...fill)
-    doc.roundedRect(x, cardY, cardW, cardH, 14, 14, 'F')
-    doc.setTextColor(15, 23, 42)
-    doc.setFont(fontFamily, 'bold')
-    doc.setFontSize(10)
-    doc.text(title.toUpperCase(), x + 16, cardY + 20)
-    doc.setFontSize(18)
-    doc.text(value, x + 16, cardY + 42)
-    doc.setFont(fontFamily, 'normal')
-    doc.setFontSize(9)
-    doc.setTextColor(71, 85, 105)
-    doc.text(subtitle, x + 16, cardY + 56)
+  const docDefinition: TDocumentDefinitions = {
+    pageOrientation: 'landscape',
+    pageSize: 'A4',
+    pageMargins: [28, 24, 28, 24],
+    defaultStyle: {
+      font: 'DejaVuSerif',
+      fontSize: 10,
+      color: '#0f172a',
+    },
+    content: [
+      { text: 'Báo cáo hiệu suất bác sĩ', style: 'title' },
+      { text: `Tạo lúc ${new Date().toLocaleString('vi-VN')}`, style: 'subtitle' },
+      {
+        columns: [
+          { text: [`Tổng lượt ghé thăm\n`, { text: formatNumber(totalVisits), style: 'metricValue' }], style: 'metricCard' },
+          { text: [`Tổng lượt follow\n`, { text: formatNumber(totalFollows), style: 'metricValue' }], style: 'metricCard' },
+          { text: [`Đánh giá trung bình\n`, { text: `${averageRating.toFixed(1)} / 5`, style: 'metricValue' }], style: 'metricCard' },
+        ],
+        columnGap: 10,
+        margin: [0, 10, 0, 12],
+      },
+      {
+        table: {
+          headerRows: 1,
+          widths: [28, '*', '*', 70, 70, 60, 60],
+          body,
+        },
+        layout: {
+          fillColor: (rowIndex: number) => (rowIndex === 0 ? '#1f6fff' : rowIndex % 2 === 0 ? '#f8fafc' : null),
+          hLineColor: '#dbe4f0',
+          vLineColor: '#dbe4f0',
+        },
+      },
+    ],
+    styles: {
+      title: { fontSize: 18, bold: true, color: '#ffffff', fillColor: '#1f6fff', margin: [0, 0, 0, 6] },
+      subtitle: { fontSize: 9, color: '#475569', margin: [0, 0, 0, 8] },
+      metricCard: { fillColor: '#eef5ff', margin: [8, 8, 8, 8], fontSize: 10, bold: true },
+      metricValue: { fontSize: 16, bold: true, color: '#1f6fff' },
+      tableHeader: { bold: true, color: '#ffffff', fillColor: '#1f6fff' },
+    },
+    header: () => ({
+      margin: [28, 18, 28, 0],
+      canvas: [{ type: 'rect', x: 0, y: 0, w: 785, h: 26, color: '#1f6fff' }],
+    }),
+    footer: (currentPage, pageCount) => ({
+      margin: [28, 0, 28, 0],
+      columns: [
+        { text: 'DAPM Doctor Report', fontSize: 9, color: '#64748b' },
+        { text: `Page ${currentPage} / ${pageCount}`, alignment: 'right', fontSize: 9, color: '#64748b' },
+      ],
+    }),
   }
 
-  drawCard(marginX, 'Tổng lượt ghé thăm', formatNumber(totalVisits), `${formatNumber(rows.length)} bác sĩ`, softBlue)
-  drawCard(marginX + cardW + cardGap, 'Tổng lượt follow', formatNumber(totalFollows), 'Trong báo cáo hiện tại', softGreen)
-  drawCard(marginX + (cardW + cardGap) * 2, 'Đánh giá trung bình', `${averageRating.toFixed(1)} / 5`, 'Từ dữ liệu rating summary', softAmber)
-
-  autoTable(doc, {
-    startY: 176,
-    head: [['#', 'Bác sĩ', 'Chuyên khoa', 'Lượt ghé thăm', 'Lượt follow', 'Đánh giá', 'Xu hướng']],
-    body: rows.map((row) => [
-      row.rank,
-      row.doctorName,
-      row.specialty,
-      formatNumber(row.visits),
-      formatNumber(row.follows),
-      `${row.rating.toFixed(1)} / 5`,
-      `${row.trend >= 0 ? '+' : ''}${row.trend.toFixed(1)}%`,
-    ]),
-    styles: { fontSize: 9, cellPadding: 8, textColor: [15, 23, 42], lineColor: [226, 232, 240], lineWidth: 0.6, font: fontFamily },
-    headStyles: { fillColor: accentBlue, textColor: [255, 255, 255], fontStyle: 'bold', font: fontFamily },
-    alternateRowStyles: { fillColor: [248, 250, 252] },
-    columnStyles: {
-      0: { halign: 'center', cellWidth: 36 },
-      3: { halign: 'right' },
-      4: { halign: 'right' },
-      5: { halign: 'right' },
-      6: { halign: 'right' },
-    },
-    margin: { left: marginX, right: marginX, bottom: 52 },
-    didParseCell: (data) => {
-      if (data.section === 'body' && data.column.index === 6) {
-        const trendValue = rows[data.row.index]?.trend ?? 0
-        data.cell.styles.textColor = trendValue >= 0 ? accentGreen : [220, 38, 38]
-      }
-      if (data.section === 'body' && data.column.index === 5) {
-        data.cell.styles.textColor = accentAmber
-      }
-    },
-    didDrawPage: (data) => {
-      const pageNumber = doc.getNumberOfPages()
-      doc.setDrawColor(226, 232, 240)
-      doc.setLineWidth(1)
-      doc.line(marginX, pageHeight - 34, pageWidth - marginX, pageHeight - 34)
-      doc.setFont(fontFamily, 'normal')
-      doc.setFontSize(9)
-      doc.setTextColor(100, 116, 139)
-      doc.text('DAPM Doctor Report', marginX, pageHeight - 18)
-      doc.text(`Page ${pageNumber}`, pageWidth - marginX - 42, pageHeight - 18)
-      doc.text(`${data.pageNumber}`, pageWidth - marginX - 8, pageHeight - 18)
-    },
-  })
-
-  return doc
+  pdfMake.createPdf(docDefinition).download(`doctor-performance-${new Date().toISOString().slice(0, 10)}.pdf`)
 }
 
 function buildDoctorRows(
@@ -302,7 +297,6 @@ export function AdminReportsPage() {
   const [activeDoctorId, setActiveDoctorId] = useState<number | null>(null)
   const [chartPeriod, setChartPeriod] = useState<ChartPeriod>('6months')
   const [page, setPage] = useState(1)
-  const [pdfPreview, setPdfPreview] = useState<{ rows: DoctorRow[]; fileName: string } | null>(null)
   const pageSize = 7
 
   const params = useMemo(
@@ -452,10 +446,7 @@ export function AdminReportsPage() {
   }
 
   const handleExportPdf = () => {
-    setPdfPreview({
-      rows: sortedRows,
-      fileName: `doctor-performance-${from}-to-${to}.pdf`,
-    })
+    createPdf(sortedRows)
   }
 
   const chartLegend = [
@@ -467,17 +458,6 @@ export function AdminReportsPage() {
   const sortIndicator = (key: SortKey) => {
     if (sortKey !== key) return '↕'
     return sortOrder === 'asc' ? '↑' : '↓'
-  }
-
-  const confirmPdfExport = () => {
-    if (!pdfPreview) return
-    const doc = createPdf(pdfPreview.rows)
-    doc.save(pdfPreview.fileName)
-    setPdfPreview(null)
-  }
-
-  const cancelPdfExport = () => {
-    setPdfPreview(null)
   }
 
   return (
@@ -782,29 +762,6 @@ export function AdminReportsPage() {
               </div>
           </section>
 
-          {pdfPreview ? (
-            <div className="reports-modal-backdrop" role="presentation" onClick={cancelPdfExport}>
-              <div className="reports-modal" role="dialog" aria-modal="true" aria-labelledby="pdf-preview-title" onClick={(event) => event.stopPropagation()}>
-                <div className="reports-modal__header">
-                  <div>
-                    <h3 id="pdf-preview-title">Xác nhận xuất PDF</h3>
-                    <p>Kiểm tra lại báo cáo trước khi tải file về máy.</p>
-                  </div>
-                  <button type="button" className="reports-icon-btn" onClick={cancelPdfExport} aria-label="Đóng">
-                    ×
-                  </button>
-                </div>
-                <div className="reports-modal__body">
-                  <p className="reports-modal__note">File: {pdfPreview.fileName}</p>
-                  <p className="reports-modal__note">Số dòng: {pdfPreview.rows.length}</p>
-                  <div className="reports-modal__actions">
-                    <button type="button" className="reports-btn reports-btn--secondary" onClick={cancelPdfExport}>Hủy</button>
-                    <button type="button" className="reports-btn reports-btn--primary" onClick={confirmPdfExport}>Xác nhận xuất</button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : null}
         </div>
       </div>
     </div>
