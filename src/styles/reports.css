@@ -760,4 +760,14 @@
     border-radius: 18px;
     font-size: 28px;
   }
+
+  .reports-modal {
+    width: calc(100vw - 20px);
+  }
+
+  .reports-modal__header,
+  .reports-modal__body {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
 }
