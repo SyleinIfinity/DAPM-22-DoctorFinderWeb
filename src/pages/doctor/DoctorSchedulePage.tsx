@@ -182,7 +182,7 @@ export function DoctorSchedulePage() {
       }))
 
       const method = editorMode === 'create' || editorMode === 'add' ? 'post' : 'put'
-      const res = await api[method]<WorkingSchedule[]>(`/api/doctors/${maBacSi}/working-slots`, { items })
+      const res = await api[method]<WorkingSchedule[]>(`/api/doctors/${maBacSi}/working-slots`, items)
       return { data: res.data, targetDates, method }
     },
     onSuccess: async ({ targetDates, method }) => {
@@ -228,7 +228,7 @@ export function DoctorSchedulePage() {
         trangThaiLich: slot.trangThaiLich,
       }))
       if (items.length === 0) throw new Error('Không có lịch để xóa.')
-      const res = await api.delete<void>(`/api/doctors/${maBacSi}/working-slots`, { data: { items } })
+      const res = await api.delete<void>(`/api/doctors/${maBacSi}/working-slots`, { data: items })
       return res.data
     },
     onSuccess: async () => {
@@ -263,7 +263,7 @@ export function DoctorSchedulePage() {
           trangThaiLich: slot.trangThaiLich,
         },
       ]
-      const res = await api.delete<void>(`/api/doctors/${maBacSi}/working-slots`, { data: { items } })
+      const res = await api.delete<void>(`/api/doctors/${maBacSi}/working-slots`, { data: items })
       return res.data
     },
     onSuccess: async () => {
