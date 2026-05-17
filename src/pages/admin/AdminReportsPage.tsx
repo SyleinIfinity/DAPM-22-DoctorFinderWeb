@@ -86,7 +86,7 @@ function exportExcel(rows: DoctorRow[], fileName: string) {
   XLSX.writeFile(workbook, fileName)
 }
 
-function exportPdf(rows: DoctorRow[], fileName: string) {
+function createPdf(rows: DoctorRow[]) {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' })
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
@@ -97,16 +97,7 @@ function exportPdf(rows: DoctorRow[], fileName: string) {
   const softBlue = [235, 244, 255] as const
   const softGreen = [233, 250, 242] as const
   const softAmber = [255, 248, 230] as const
-  const fontData = (window as Window & { __robotoFontData?: string }).__robotoFontData
-
-  if (fontData) {
-    doc.addFileToVFS('Roboto-Variable.ttf', fontData)
-    doc.addFont('Roboto-Variable.ttf', 'Roboto', 'normal')
-    doc.addFont('Roboto-Variable.ttf', 'Roboto', 'bold')
-    doc.setFont('Roboto', 'normal')
-  }
-
-  const fontFamily = fontData ? 'Roboto' : 'helvetica'
+  const fontFamily = 'helvetica'
 
   const totalVisits = rows.reduce((sum, row) => sum + row.visits, 0)
   const totalFollows = rows.reduce((sum, row) => sum + row.follows, 0)
@@ -148,7 +139,7 @@ function exportPdf(rows: DoctorRow[], fileName: string) {
 
   autoTable(doc, {
     startY: 176,
-    head: [['#', 'Doctor', 'Specialty', 'Visits', 'Follow', 'Rating', 'Trend']],
+    head: [['#', 'Bác sĩ', 'Chuyên khoa', 'Lượt ghé thăm', 'Lượt follow', 'Đánh giá', 'Xu hướng']],
     body: rows.map((row) => [
       row.rank,
       row.doctorName,
@@ -158,8 +149,8 @@ function exportPdf(rows: DoctorRow[], fileName: string) {
       `${row.rating.toFixed(1)} / 5`,
       `${row.trend >= 0 ? '+' : ''}${row.trend.toFixed(1)}%`,
     ]),
-    styles: { fontSize: 9, cellPadding: 8, textColor: [15, 23, 42], lineColor: [226, 232, 240], lineWidth: 0.6 },
-    headStyles: { fillColor: accentBlue, textColor: [255, 255, 255], fontStyle: 'bold' },
+    styles: { fontSize: 9, cellPadding: 8, textColor: [15, 23, 42], lineColor: [226, 232, 240], lineWidth: 0.6, font: fontFamily },
+    headStyles: { fillColor: accentBlue, textColor: [255, 255, 255], fontStyle: 'bold', font: fontFamily },
     alternateRowStyles: { fillColor: [248, 250, 252] },
     columnStyles: {
       0: { halign: 'center', cellWidth: 36 },
@@ -192,7 +183,7 @@ function exportPdf(rows: DoctorRow[], fileName: string) {
     },
   })
 
-  doc.save(fileName)
+  return doc
 }
 
 function buildDoctorRows(
@@ -311,6 +302,7 @@ export function AdminReportsPage() {
   const [activeDoctorId, setActiveDoctorId] = useState<number | null>(null)
   const [chartPeriod, setChartPeriod] = useState<ChartPeriod>('6months')
   const [page, setPage] = useState(1)
+  const [pdfPreview, setPdfPreview] = useState<{ rows: DoctorRow[]; fileName: string; url: string } | null>(null)
   const pageSize = 7
 
   const params = useMemo(
@@ -460,7 +452,11 @@ export function AdminReportsPage() {
   }
 
   const handleExportPdf = () => {
-    exportPdf(sortedRows, `doctor-performance-${from}-to-${to}.pdf`)
+    setPdfPreview({
+      rows: sortedRows,
+      fileName: `doctor-performance-${from}-to-${to}.pdf`,
+      open: true,
+    })
   }
 
   const chartLegend = [
@@ -472,6 +468,13 @@ export function AdminReportsPage() {
   const sortIndicator = (key: SortKey) => {
     if (sortKey !== key) return '↕'
     return sortOrder === 'asc' ? '↑' : '↓'
+  }
+
+  const confirmPdfExport = () => {
+    if (!pdfPreview) return
+    const doc = createPdf(pdfPreview.rows)
+    doc.save(pdfPreview.fileName)
+    setPdfPreview(null)
   }
 
   return (
