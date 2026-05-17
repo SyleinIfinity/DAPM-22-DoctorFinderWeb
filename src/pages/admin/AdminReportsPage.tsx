@@ -2,19 +2,96 @@ import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import * as XLSX from 'xlsx'
-import pdfMake from 'pdfmake/build/pdfmake'
-import type { TDocumentDefinitions } from 'pdfmake/interfaces'
-import dejavusansRegular from '../../assets/fonts/DejaVuSerif.ttf?url'
-import dejavusansBold from '../../assets/fonts/DejaVuSerif-Bold.ttf?url'
-import dejavusansItalic from '../../assets/fonts/DejaVuSerif-Italic.ttf?url'
-import dejavusansBoldItalic from '../../assets/fonts/DejaVuSerif-BoldItalic.ttf?url'
 import { api } from '../../api/http'
 import type { AdminReportDoctorRank, DoctorRatingSummary } from '../../api/types'
 import { DoctorAvatar } from '../doctor/doctorUi'
 import '../../styles/reports.css'
 
+type TDocumentDefinitions = {
+  pageOrientation?: 'portrait' | 'landscape'
+  pageSize?: string | { width: number; height: number }
+  pageMargins?: [number, number, number, number]
+  defaultStyle?: {
+    font?: string
+    fontSize?: number
+    color?: string
+  }
+  content: unknown[]
+  styles?: Record<string, Record<string, unknown>>
+  header?: () => unknown
+  footer?: (currentPage: number, pageCount: number) => unknown
+}
+
 type SortKey = 'rank' | 'doctorName' | 'visits' | 'follows' | 'rating' | 'trend'
 type SortOrder = 'asc' | 'desc'
+
+type PdfMakeInstance = {
+  vfs?: Record<string, string>
+  createPdf: (doc: TDocumentDefinitions) => { download: (fileName: string) => void }
+}
+
+type PdfMakeModule = PdfMakeInstance & { default?: PdfMakeInstance }
+
+type PdfFontsModule = {
+  pdfMake?: { vfs: Record<string, string> }
+  vfs?: Record<string, string>
+  default?: {
+    pdfMake?: { vfs: Record<string, string> }
+    vfs?: Record<string, string>
+    default?: {
+      pdfMake?: { vfs: Record<string, string> }
+      vfs?: Record<string, string>
+    }
+  }
+}
+
+let cachedPdfMake: PdfMakeInstance | null = null
+
+function isVfsRecord(value: unknown): value is Record<string, string> {
+  if (!value || typeof value !== 'object') return false
+  const entries = Object.entries(value)
+  if (entries.length === 0) return false
+  return entries.some(([key, item]) => key.endsWith('.ttf') && typeof item === 'string')
+}
+
+async function extractVfs(module: PdfFontsModule) {
+  const rawDefault = module.default as unknown
+  if (isVfsRecord(rawDefault)) return rawDefault
+  const nestedDefault = (module.default?.default ?? null) as unknown
+  if (isVfsRecord(nestedDefault)) return nestedDefault
+  return (
+    module.pdfMake?.vfs ??
+    module.vfs ??
+    module.default?.pdfMake?.vfs ??
+    module.default?.vfs ??
+    module.default?.default?.pdfMake?.vfs ??
+    module.default?.default?.vfs
+  )
+}
+
+async function loadPdfMake() {
+  if (cachedPdfMake) return cachedPdfMake
+  const pdfMakeModule = (await import('pdfmake/build/pdfmake')) as PdfMakeModule
+  const pdfMake = pdfMakeModule.default ?? pdfMakeModule
+  const pdfFontsModule = (await import('pdfmake/build/vfs_fonts')) as PdfFontsModule
+  const vfs =
+    (await extractVfs(pdfFontsModule)) ??
+    (await extractVfs((await import('pdfmake/build/vfs_fonts.js')) as PdfFontsModule))
+  if (!vfs) {
+    throw new Error('Không tải được font PDF.')
+  }
+  pdfMake.vfs = vfs
+  ;(pdfMake as { fonts?: Record<string, Record<string, string>> }).fonts ??= {
+    Roboto: {
+      normal: 'Roboto-Regular.ttf',
+      bold: 'Roboto-Medium.ttf',
+      italics: 'Roboto-Italic.ttf',
+      bolditalics: 'Roboto-MediumItalic.ttf',
+    },
+  }
+  cachedPdfMake = pdfMake
+  return pdfMake
+}
 
 type DoctorRow = {
   id: number
@@ -30,14 +107,6 @@ type DoctorRow = {
 
 type ChartPeriod = '6months' | '30days' | '7days'
 
-pdfMake.fonts = {
-  DejaVuSerif: {
-    normal: dejavusansRegular,
-    bold: dejavusansBold,
-    italics: dejavusansItalic,
-    bolditalics: dejavusansBoldItalic,
-  },
-}
 
 function defaultRange() {
   const to = new Date()
@@ -98,7 +167,8 @@ function exportExcel(rows: DoctorRow[], fileName: string) {
   XLSX.writeFile(workbook, fileName)
 }
 
-function createPdf(rows: DoctorRow[]) {
+async function createPdf(rows: DoctorRow[]) {
+  const pdfMake = await loadPdfMake()
   const body = [
     [
       { text: '#', style: 'tableHeader', alignment: 'center' },
@@ -129,7 +199,7 @@ function createPdf(rows: DoctorRow[]) {
     pageSize: 'A4',
     pageMargins: [28, 24, 28, 24],
     defaultStyle: {
-      font: 'DejaVuSerif',
+      font: 'Roboto',
       fontSize: 10,
       color: '#0f172a',
     },
@@ -138,9 +208,27 @@ function createPdf(rows: DoctorRow[]) {
       { text: `Tạo lúc ${new Date().toLocaleString('vi-VN')}`, style: 'subtitle' },
       {
         columns: [
-          { text: [`Tổng lượt ghé thăm\n`, { text: formatNumber(totalVisits), style: 'metricValue' }], style: 'metricCard' },
-          { text: [`Tổng lượt follow\n`, { text: formatNumber(totalFollows), style: 'metricValue' }], style: 'metricCard' },
-          { text: [`Đánh giá trung bình\n`, { text: `${averageRating.toFixed(1)} / 5`, style: 'metricValue' }], style: 'metricCard' },
+          {
+            stack: [
+              { text: 'Tổng lượt ghé thăm', style: 'metricLabel' },
+              { text: formatNumber(totalVisits), style: 'metricValue' },
+            ],
+            style: 'metricCard',
+          },
+          {
+            stack: [
+              { text: 'Tổng lượt follow', style: 'metricLabel' },
+              { text: formatNumber(totalFollows), style: 'metricValue' },
+            ],
+            style: 'metricCard',
+          },
+          {
+            stack: [
+              { text: 'Đánh giá trung bình', style: 'metricLabel' },
+              { text: `${averageRating.toFixed(1)} / 5`, style: 'metricValue' },
+            ],
+            style: 'metricCard',
+          },
         ],
         columnGap: 10,
         margin: [0, 10, 0, 12],
@@ -161,24 +249,19 @@ function createPdf(rows: DoctorRow[]) {
     styles: {
       title: { fontSize: 18, bold: true, color: '#ffffff', fillColor: '#1f6fff', margin: [0, 0, 0, 6] },
       subtitle: { fontSize: 9, color: '#475569', margin: [0, 0, 0, 8] },
+      metricLabel: { fontSize: 10, color: '#475569' },
       metricCard: { fillColor: '#eef5ff', margin: [8, 8, 8, 8], fontSize: 10, bold: true },
       metricValue: { fontSize: 16, bold: true, color: '#1f6fff' },
       tableHeader: { bold: true, color: '#ffffff', fillColor: '#1f6fff' },
     },
-    header: () => ({
-      margin: [28, 18, 28, 0],
-      canvas: [{ type: 'rect', x: 0, y: 0, w: 785, h: 26, color: '#1f6fff' }],
-    }),
-    footer: (currentPage, pageCount) => ({
-      margin: [28, 0, 28, 0],
-      columns: [
-        { text: 'DAPM Doctor Report', fontSize: 9, color: '#64748b' },
-        { text: `Page ${currentPage} / ${pageCount}`, alignment: 'right', fontSize: 9, color: '#64748b' },
-      ],
-    }),
   }
 
-  pdfMake.createPdf(docDefinition).download(`doctor-performance-${new Date().toISOString().slice(0, 10)}.pdf`)
+  try {
+    await pdfMake.createPdf(docDefinition).download(`doctor-performance-${new Date().toISOString().slice(0, 10)}.pdf`)
+  } catch (error) {
+    console.error('Không thể xuất PDF', error)
+    alert('Không thể xuất PDF. Vui lòng thử lại hoặc mở Console để xem lỗi chi tiết.')
+  }
 }
 
 function buildDoctorRows(
@@ -446,7 +529,7 @@ export function AdminReportsPage() {
   }
 
   const handleExportPdf = () => {
-    createPdf(sortedRows)
+    void createPdf(sortedRows)
   }
 
   const chartLegend = [
