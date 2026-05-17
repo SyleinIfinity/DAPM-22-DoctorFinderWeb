@@ -4,6 +4,7 @@ import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAx
 import * as XLSX from 'xlsx'
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import robotoFontUrl from '../../assets/fonts/Roboto-Variable.ttf?url'
 import { api } from '../../api/http'
 import type { AdminReportDoctorRank, DoctorRatingSummary } from '../../api/types'
 import { DoctorAvatar } from '../doctor/doctorUi'
@@ -96,6 +97,16 @@ function exportPdf(rows: DoctorRow[], fileName: string) {
   const softBlue = [235, 244, 255] as const
   const softGreen = [233, 250, 242] as const
   const softAmber = [255, 248, 230] as const
+  const fontData = (window as Window & { __robotoFontData?: string }).__robotoFontData
+
+  if (fontData) {
+    doc.addFileToVFS('Roboto-Variable.ttf', fontData)
+    doc.addFont('Roboto-Variable.ttf', 'Roboto', 'normal')
+    doc.addFont('Roboto-Variable.ttf', 'Roboto', 'bold')
+    doc.setFont('Roboto', 'normal')
+  }
+
+  const fontFamily = fontData ? 'Roboto' : 'helvetica'
 
   const totalVisits = rows.reduce((sum, row) => sum + row.visits, 0)
   const totalFollows = rows.reduce((sum, row) => sum + row.follows, 0)
@@ -104,12 +115,12 @@ function exportPdf(rows: DoctorRow[], fileName: string) {
   doc.setFillColor(...accentBlue)
   doc.rect(0, 0, pageWidth, 74, 'F')
   doc.setTextColor(255, 255, 255)
-  doc.setFont('helvetica', 'bold')
+  doc.setFont(fontFamily, 'bold')
   doc.setFontSize(20)
-  doc.text('Doctor Performance Report', marginX, 32)
-  doc.setFont('helvetica', 'normal')
+  doc.text('Báo cáo hiệu suất bác sĩ', marginX, 32)
+  doc.setFont(fontFamily, 'normal')
   doc.setFontSize(10)
-  doc.text(`Generated at ${new Date().toLocaleString('vi-VN')}`, marginX, 52)
+  doc.text(`Tạo lúc ${new Date().toLocaleString('vi-VN')}`, marginX, 52)
 
   const cardY = 94
   const cardH = 62
@@ -120,12 +131,12 @@ function exportPdf(rows: DoctorRow[], fileName: string) {
     doc.setFillColor(...fill)
     doc.roundedRect(x, cardY, cardW, cardH, 14, 14, 'F')
     doc.setTextColor(15, 23, 42)
-    doc.setFont('helvetica', 'bold')
+    doc.setFont(fontFamily, 'bold')
     doc.setFontSize(10)
     doc.text(title.toUpperCase(), x + 16, cardY + 20)
     doc.setFontSize(18)
     doc.text(value, x + 16, cardY + 42)
-    doc.setFont('helvetica', 'normal')
+    doc.setFont(fontFamily, 'normal')
     doc.setFontSize(9)
     doc.setTextColor(71, 85, 105)
     doc.text(subtitle, x + 16, cardY + 56)
@@ -172,7 +183,7 @@ function exportPdf(rows: DoctorRow[], fileName: string) {
       doc.setDrawColor(226, 232, 240)
       doc.setLineWidth(1)
       doc.line(marginX, pageHeight - 34, pageWidth - marginX, pageHeight - 34)
-      doc.setFont('helvetica', 'normal')
+      doc.setFont(fontFamily, 'normal')
       doc.setFontSize(9)
       doc.setTextColor(100, 116, 139)
       doc.text('DAPM Doctor Report', marginX, pageHeight - 18)
