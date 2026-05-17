@@ -43,6 +43,7 @@ export function WorkingSlotsPage() {
   const [monthAnchor, setMonthAnchor] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState(todayStr);
   const [selectedSlot, setSelectedSlot] = useState<WorkingSlot | null>(null);
+  const [fullDates, setFullDates] = useState<Set<string>>(new Set());
 
   const doctorQuery = useQuery({
     queryKey: ["doctor-profile", maBacSi, session?.maTaiKhoan],
@@ -69,57 +70,66 @@ export function WorkingSlotsPage() {
   const slots = scheduleQuery.data || [];
   const selectedDaySlots = useMemo(() => slots.filter((slot) => (slot.ngayCuThe || selectedDate) === selectedDate), [slots, selectedDate]);
   const selectedDoctor = doctorQuery.data;
+  
+  useMemo(() => {
+    if (slots.length > 0) {
+      if (selectedDate === todayStr) {
+        const now = new Date();
+        const currentHourStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+        const futureSlots = selectedDaySlots.filter(slot => slot.gioBatDau >= currentHourStr);
+        const isFull = futureSlots.length > 0 ? futureSlots.every(s => s.trangThai !== "TRONG") : true;
+        if (isFull) {
+          setFullDates(prev => new Set([...prev, selectedDate]));
+        }
+      } else {
+        const isFull = selectedDaySlots.length > 0 && selectedDaySlots.every(s => s.trangThai !== "TRONG");
+        if (isFull) {
+          setFullDates(prev => new Set([...prev, selectedDate]));
+        }
+      }
+    }
+  }, [slots, selectedDate, selectedDaySlots, todayStr]);
 
   const getSlotStyle = (slot: WorkingSlot, isSelected: boolean) => {
-      const isBooked = slot.trangThai !== "TRONG"; 
-      
+      const isBooked = slot.trangThai !== "TRONG";
+      const isPastDate = selectedDate < todayStr;
       const now = new Date();
       const currentHourStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
       const isPastTime = selectedDate === todayStr && slot.gioBatDau < currentHourStr;
-      
-      const isUnavailable = isBooked || isPastTime;
+      const isPast = isPastDate || isPastTime;
 
-      if (isUnavailable) {
+      if (isPast) {
           return {
-              className: "member-slot-card is-disabled",
-              style: {
-                  backgroundColor: isPastTime ? '#f3f4f6' : '#fee2e2',
-                  borderColor: isPastTime ? '#d1d5db' : '#fca5a5', 
-                  color: isPastTime ? '#9ca3af' : '#b91c1c',
-                  cursor: 'not-allowed',
-              },
-              statusText: isPastTime ? "Đã qua" : "Đã hết chỗ",
-              statusBgColor: 'transparent',
-              statusTextColor: isPastTime ? '#9ca3af' : '#b91c1c' 
+              className: "member-slot-card member-slot-card--past",
+              statusText: "Đã qua",
+              statusTone: "past",
+              isDisabled: true,
+          };
+      }
+
+      if (isBooked) {
+          return {
+              className: "member-slot-card member-slot-card--full",
+              statusText: "Hết chỗ",
+              statusTone: "full",
+              isDisabled: true,
           };
       }
 
       if (isSelected) {
-           return {
-              className: "member-slot-card is-active",
-              style: {
-                  backgroundColor: '#3b82f6',
-                  borderColor: '#2563eb',
-                  color: '#ffffff',
-                  transform: 'scale(1.02)',
-                  boxShadow: '0 4px 6px -1px rgba(59, 130, 246, 0.5)'
-              },
+          return {
+              className: "member-slot-card member-slot-card--active",
               statusText: "Đang chọn",
-              statusBgColor: 'transparent', 
-              statusTextColor: '#ffffff'
+              statusTone: "active",
+              isDisabled: false,
           };
       }
 
       return {
-          className: "member-slot-card",
-          style: {
-               backgroundColor: '#ffffff',
-               borderColor: '#3b82f6', 
-               color: '#1d4ed8',
-          },
+          className: "member-slot-card member-slot-card--available",
           statusText: "Còn chỗ",
-          statusBgColor: '#dbeafe',
-          statusTextColor: '#1e40af'
+          statusTone: "available",
+          isDisabled: false,
       };
   };
 
@@ -195,31 +205,22 @@ export function WorkingSlotsPage() {
                 const isPastDate = dateKey < todayStr; 
                 const active = dateKey === selectedDate;
                 const available = dateKey >= todayStr && dateKey <= ymd(addDays(new Date(), 60));
+                const isFull = fullDates.has(dateKey);
                 
-                let dayStyle: React.CSSProperties = {};
-                if (isPastDate) {
-                    dayStyle = { backgroundColor: '#f3f4f6', color: '#9ca3af', cursor: 'not-allowed', borderColor: 'transparent' };
-                } else if (active) {
-                    dayStyle = { backgroundColor: '#3b82f6', color: '#ffffff', borderColor: '#3b82f6' };
-                } else if (available) {
-                    dayStyle = { backgroundColor: '#ffffff', color: '#1f2937', borderColor: '#e5e7eb' };
-                }
-
                 return (
                     <button
                     key={dateKey}
                     type="button"
-                    className={`member-booking-calendar__day ${active ? 'is-active' : ''}`}
+                    className={`member-booking-calendar__day${active ? ' is-active' : ''}${isPastDate ? ' is-disabled' : ''}${isFull ? ' is-full' : ''}`}
                     disabled={isPastDate || !available}
                     onClick={() => {
                         setSelectedDate(dateKey);
                         setSelectedSlot(null); 
                     }}
-                    style={dayStyle}
                     >
                     <span style={{ fontSize: '18px', fontWeight: 'bold' }}>{day.getDate()}</span>
                     <small style={{ fontSize: '10px' }}>
-                        {isPastDate ? "Đã qua" : available ? (active ? "Đang xem" : "Chọn") : "Chưa mở"}
+                        {isPastDate ? "Đã qua" : available ? (active ? (isFull ? "Hết chỗ" : "Đang xem") : "Chọn") : "Chưa mở"}
                     </small>
                     </button>
                 );
@@ -257,6 +258,21 @@ export function WorkingSlotsPage() {
             </div>
           </div>
 
+          <div className="member-slot-legend">
+            <span className="member-slot-legend__item">
+              <i className="member-slot-legend__dot member-slot-legend__dot--available" />
+              Còn chỗ
+            </span>
+            <span className="member-slot-legend__item">
+              <i className="member-slot-legend__dot member-slot-legend__dot--full" />
+              Hết chỗ
+            </span>
+            <span className="member-slot-legend__item">
+              <i className="member-slot-legend__dot member-slot-legend__dot--past" />
+              Đã qua
+            </span>
+          </div>
+
           {scheduleQuery.isLoading ? <div className="member-empty-state">Đang tải lịch khả dụng...</div> : null}
           {!scheduleQuery.isLoading && selectedDaySlots.length === 0 ? <div className="member-empty-state">Ngày này chưa có khung giờ khả dụng hoặc bác sĩ nghỉ.</div> : null}
 
@@ -264,17 +280,15 @@ export function WorkingSlotsPage() {
             {selectedDaySlots.map((slot) => {
               const isSelected = selectedSlot?.maChiTiet === slot.maChiTiet;
               const slotProps = getSlotStyle(slot, isSelected);
-              const isDisabled = slotProps.statusText === "Đã qua" || slotProps.statusText === "Đã đặt";
 
               return (
                   <button
                     key={slot.maChiTiet}
                     type="button"
                     className={slotProps.className}
-                    disabled={isDisabled}
+                    disabled={slotProps.isDisabled}
                     onClick={() => setSelectedSlot(slot)}
                     style={{
-                        ...slotProps.style,
                         padding: '12px 8px',
                         borderRadius: '8px',
                         borderWidth: '1px',
@@ -287,15 +301,7 @@ export function WorkingSlotsPage() {
                     }}
                   >
                     <strong style={{ fontSize: '15px' }}>{slot.gioBatDau.slice(0, 5)} - {slot.gioKetThuc.slice(0, 5)}</strong>
-                    <span style={{ 
-                        marginTop: '4px', 
-                        fontSize: '11px', 
-                        padding: '2px 8px', 
-                        borderRadius: '10px',
-                        backgroundColor: slotProps.statusBgColor,
-                        color: slotProps.statusTextColor,
-                        fontWeight: 'bold'
-                    }}>
+                    <span className={`member-slot-status member-slot-status--${slotProps.statusTone}`}>
                         {slotProps.statusText}
                     </span>
                   </button>
