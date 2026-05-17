@@ -185,17 +185,24 @@ export function DoctorSchedulePage() {
       const res = await api[method]<WorkingSchedule[]>(`/api/doctors/${maBacSi}/working-slots`, items)
       return { data: res.data, targetDates, method }
     },
-    onSuccess: async ({ targetDates, method }) => {
+    onSuccess: async ({ data, targetDates, method }) => {
       const title =
         method === 'post'
           ? editorMode === 'create'
             ? 'Đã tạo lịch làm việc'
             : 'Đã thêm lịch làm việc'
           : 'Đã chỉnh sửa lịch làm việc'
+
+      const skippedCount = Math.max(0, targetDates.length - data.length)
+      const description =
+        skippedCount > 0
+          ? `Đã cập nhật ${data.length}/${targetDates.length} ngày. ${skippedCount} ngày bị trùng đã được bỏ qua.`
+          : 'Các ngày áp dụng đã được cập nhật thành công.'
+
       setNotice({
         tone: 'success',
         title,
-        description: 'Các ngày áp dụng đã được cập nhật thành công.',
+        description,
       })
       setKnownDayStates((prev) => {
         const next = { ...prev }
