@@ -2,15 +2,96 @@ import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import * as XLSX from 'xlsx'
-import { jsPDF } from 'jspdf'
-import autoTable from 'jspdf-autotable'
 import { api } from '../../api/http'
-import type { AdminReportDoctorRank } from '../../api/types'
+import type { AdminReportDoctorRank, DoctorRatingSummary } from '../../api/types'
 import { DoctorAvatar } from '../doctor/doctorUi'
 import '../../styles/reports.css'
 
+type TDocumentDefinitions = {
+  pageOrientation?: 'portrait' | 'landscape'
+  pageSize?: string | { width: number; height: number }
+  pageMargins?: [number, number, number, number]
+  defaultStyle?: {
+    font?: string
+    fontSize?: number
+    color?: string
+  }
+  content: unknown[]
+  styles?: Record<string, Record<string, unknown>>
+  header?: () => unknown
+  footer?: (currentPage: number, pageCount: number) => unknown
+}
+
 type SortKey = 'rank' | 'doctorName' | 'visits' | 'follows' | 'rating' | 'trend'
 type SortOrder = 'asc' | 'desc'
+
+type PdfMakeInstance = {
+  vfs?: Record<string, string>
+  createPdf: (doc: TDocumentDefinitions) => { download: (fileName: string) => void }
+}
+
+type PdfMakeModule = PdfMakeInstance & { default?: PdfMakeInstance }
+
+type PdfFontsModule = {
+  pdfMake?: { vfs: Record<string, string> }
+  vfs?: Record<string, string>
+  default?: {
+    pdfMake?: { vfs: Record<string, string> }
+    vfs?: Record<string, string>
+    default?: {
+      pdfMake?: { vfs: Record<string, string> }
+      vfs?: Record<string, string>
+    }
+  }
+}
+
+let cachedPdfMake: PdfMakeInstance | null = null
+
+function isVfsRecord(value: unknown): value is Record<string, string> {
+  if (!value || typeof value !== 'object') return false
+  const entries = Object.entries(value)
+  if (entries.length === 0) return false
+  return entries.some(([key, item]) => key.endsWith('.ttf') && typeof item === 'string')
+}
+
+async function extractVfs(module: PdfFontsModule) {
+  const rawDefault = module.default as unknown
+  if (isVfsRecord(rawDefault)) return rawDefault
+  const nestedDefault = (module.default?.default ?? null) as unknown
+  if (isVfsRecord(nestedDefault)) return nestedDefault
+  return (
+    module.pdfMake?.vfs ??
+    module.vfs ??
+    module.default?.pdfMake?.vfs ??
+    module.default?.vfs ??
+    module.default?.default?.pdfMake?.vfs ??
+    module.default?.default?.vfs
+  )
+}
+
+async function loadPdfMake() {
+  if (cachedPdfMake) return cachedPdfMake
+  const pdfMakeModule = (await import('pdfmake/build/pdfmake')) as PdfMakeModule
+  const pdfMake = pdfMakeModule.default ?? pdfMakeModule
+  const pdfFontsModule = (await import('pdfmake/build/vfs_fonts')) as PdfFontsModule
+  const vfs =
+    (await extractVfs(pdfFontsModule)) ??
+    (await extractVfs((await import('pdfmake/build/vfs_fonts.js')) as PdfFontsModule))
+  if (!vfs) {
+    throw new Error('Không tải được font PDF.')
+  }
+  pdfMake.vfs = vfs
+  ;(pdfMake as { fonts?: Record<string, Record<string, string>> }).fonts ??= {
+    Roboto: {
+      normal: 'Roboto-Regular.ttf',
+      bold: 'Roboto-Medium.ttf',
+      italics: 'Roboto-Italic.ttf',
+      bolditalics: 'Roboto-MediumItalic.ttf',
+    },
+  }
+  cachedPdfMake = pdfMake
+  return pdfMake
+}
 
 type DoctorRow = {
   id: number
@@ -20,10 +101,12 @@ type DoctorRow = {
   visits: number
   follows: number
   rating: number
+  ratingCount: number
   trend: number
 }
 
 type ChartPeriod = '6months' | '30days' | '7days'
+
 
 function defaultRange() {
   const to = new Date()
@@ -84,32 +167,108 @@ function exportExcel(rows: DoctorRow[], fileName: string) {
   XLSX.writeFile(workbook, fileName)
 }
 
-function exportPdf(rows: DoctorRow[], fileName: string) {
-  const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' })
-  doc.setFontSize(16)
-  doc.text('Doctor Performance Report', 40, 34)
-
-  autoTable(doc, {
-    startY: 52,
-    head: [['#', 'Doctor', 'Specialty', 'Visits', 'Follow', 'Rating', 'Trend']],
-    body: rows.map((row) => [
-      row.rank,
-      row.doctorName,
-      row.specialty,
-      formatNumber(row.visits),
-      formatNumber(row.follows),
-      row.rating.toFixed(1),
-      `${row.trend >= 0 ? '+' : ''}${row.trend.toFixed(1)}%`,
+async function createPdf(rows: DoctorRow[]) {
+  const pdfMake = await loadPdfMake()
+  const body = [
+    [
+      { text: '#', style: 'tableHeader', alignment: 'center' },
+      { text: 'Bác sĩ', style: 'tableHeader' },
+      { text: 'Chuyên khoa', style: 'tableHeader' },
+      { text: 'Lượt ghé thăm', style: 'tableHeader', alignment: 'right' },
+      { text: 'Lượt follow', style: 'tableHeader', alignment: 'right' },
+      { text: 'Đánh giá', style: 'tableHeader', alignment: 'right' },
+      { text: 'Xu hướng', style: 'tableHeader', alignment: 'right' },
+    ],
+    ...rows.map((row) => [
+      { text: String(row.rank), alignment: 'center' },
+      { text: row.doctorName },
+      { text: row.specialty },
+      { text: formatNumber(row.visits), alignment: 'right' },
+      { text: formatNumber(row.follows), alignment: 'right' },
+      { text: `${row.rating.toFixed(1)} / 5`, alignment: 'right' },
+      { text: `${row.trend >= 0 ? '+' : ''}${row.trend.toFixed(1)}%`, alignment: 'right' },
     ]),
-    styles: { fontSize: 9, cellPadding: 6 },
-    headStyles: { fillColor: [31, 111, 255] },
-    alternateRowStyles: { fillColor: [245, 248, 252] },
-  })
+  ]
 
-  doc.save(fileName)
+  const totalVisits = rows.reduce((sum, row) => sum + row.visits, 0)
+  const totalFollows = rows.reduce((sum, row) => sum + row.follows, 0)
+  const averageRating = rows.length > 0 ? rows.reduce((sum, row) => sum + row.rating, 0) / rows.length : 0
+
+  const docDefinition: TDocumentDefinitions = {
+    pageOrientation: 'landscape',
+    pageSize: 'A4',
+    pageMargins: [28, 24, 28, 24],
+    defaultStyle: {
+      font: 'Roboto',
+      fontSize: 10,
+      color: '#0f172a',
+    },
+    content: [
+      { text: 'Báo cáo hiệu suất bác sĩ', style: 'title' },
+      { text: `Tạo lúc ${new Date().toLocaleString('vi-VN')}`, style: 'subtitle' },
+      {
+        columns: [
+          {
+            stack: [
+              { text: 'Tổng lượt ghé thăm', style: 'metricLabel' },
+              { text: formatNumber(totalVisits), style: 'metricValue' },
+            ],
+            style: 'metricCard',
+          },
+          {
+            stack: [
+              { text: 'Tổng lượt follow', style: 'metricLabel' },
+              { text: formatNumber(totalFollows), style: 'metricValue' },
+            ],
+            style: 'metricCard',
+          },
+          {
+            stack: [
+              { text: 'Đánh giá trung bình', style: 'metricLabel' },
+              { text: `${averageRating.toFixed(1)} / 5`, style: 'metricValue' },
+            ],
+            style: 'metricCard',
+          },
+        ],
+        columnGap: 10,
+        margin: [0, 10, 0, 12],
+      },
+      {
+        table: {
+          headerRows: 1,
+          widths: [28, '*', '*', 70, 70, 60, 60],
+          body,
+        },
+        layout: {
+          fillColor: (rowIndex: number) => (rowIndex === 0 ? '#1f6fff' : rowIndex % 2 === 0 ? '#f8fafc' : null),
+          hLineColor: '#dbe4f0',
+          vLineColor: '#dbe4f0',
+        },
+      },
+    ],
+    styles: {
+      title: { fontSize: 18, bold: true, color: '#ffffff', fillColor: '#1f6fff', margin: [0, 0, 0, 6] },
+      subtitle: { fontSize: 9, color: '#475569', margin: [0, 0, 0, 8] },
+      metricLabel: { fontSize: 10, color: '#475569' },
+      metricCard: { fillColor: '#eef5ff', margin: [8, 8, 8, 8], fontSize: 10, bold: true },
+      metricValue: { fontSize: 16, bold: true, color: '#1f6fff' },
+      tableHeader: { bold: true, color: '#ffffff', fillColor: '#1f6fff' },
+    },
+  }
+
+  try {
+    await pdfMake.createPdf(docDefinition).download(`doctor-performance-${new Date().toISOString().slice(0, 10)}.pdf`)
+  } catch (error) {
+    console.error('Không thể xuất PDF', error)
+    alert('Không thể xuất PDF. Vui lòng thử lại hoặc mở Console để xem lỗi chi tiết.')
+  }
 }
 
-function buildDoctorRows(views: AdminReportDoctorRank[], follows: AdminReportDoctorRank[]) {
+function buildDoctorRows(
+  views: AdminReportDoctorRank[],
+  follows: AdminReportDoctorRank[],
+  ratings: DoctorRatingSummary[],
+) {
   const map = new Map<number, Omit<DoctorRow, 'trend'>>()
 
   views.forEach((doctor) => {
@@ -120,7 +279,8 @@ function buildDoctorRows(views: AdminReportDoctorRank[], follows: AdminReportDoc
       specialty: doctor.chuyenKhoa || 'Chưa rõ',
       visits: doctor.count,
       follows: 0,
-      rating: Math.min(5, 4.1 + doctor.count / 18000),
+      rating: 0,
+      ratingCount: 0,
     })
   })
 
@@ -132,15 +292,32 @@ function buildDoctorRows(views: AdminReportDoctorRank[], follows: AdminReportDoc
       specialty: doctor.chuyenKhoa || 'Chưa rõ',
       visits: 0,
       follows: 0,
-      rating: 4.1,
+      rating: 0,
+      ratingCount: 0,
     }
 
     current.rank = Math.min(current.rank, doctor.rank)
     current.doctorName = doctor.hoTenDayDu
     current.specialty = doctor.chuyenKhoa || current.specialty
     current.follows = doctor.count
-    current.rating = Math.min(5, Math.max(current.rating, 4.1 + doctor.count / 12000))
 
+    map.set(doctor.maBacSi, current)
+  })
+
+  ratings.forEach((doctor) => {
+    const current = map.get(doctor.maBacSi) || {
+      id: doctor.maBacSi,
+      rank: Number.MAX_SAFE_INTEGER,
+      doctorName: `BS.${doctor.maBacSi}`,
+      specialty: 'Chưa rõ',
+      visits: 0,
+      follows: 0,
+      rating: 0,
+      ratingCount: 0,
+    }
+
+    current.ratingCount = doctor.tongDanhGia
+    current.rating = doctor.soSaoTrungBinh ?? 0
     map.set(doctor.maBacSi, current)
   })
 
@@ -223,12 +400,30 @@ export function AdminReportsPage() {
     queryFn: async () => (await api.get<AdminReportDoctorRank[]>('/api/admin/reports/top-doctors', { params: { ...params, metric: 'follow', limit: 20 } })).data,
   })
 
+  const doctorIds = useMemo(() => {
+    const ids = new Set<number>()
+    ;(topViewQuery.data || []).forEach((doctor) => ids.add(doctor.maBacSi))
+    ;(topFollowQuery.data || []).forEach((doctor) => ids.add(doctor.maBacSi))
+    return Array.from(ids)
+  }, [topFollowQuery.data, topViewQuery.data])
+
+  const ratingQuery = useQuery({
+    queryKey: ['admin-report-rating-summary', params.from, params.to, doctorIds.join(',')],
+    queryFn: async () => {
+      const results = await Promise.all(
+        doctorIds.map(async (doctorId) => (await api.get<DoctorRatingSummary>(`/api/doctors/${doctorId}/rating-summary`)).data),
+      )
+      return results
+    },
+    enabled: doctorIds.length > 0,
+  })
+
   const doctorRows = useMemo(
-    () => buildDoctorRows(topViewQuery.data || [], topFollowQuery.data || []),
-    [topFollowQuery.data, topViewQuery.data],
+    () => buildDoctorRows(topViewQuery.data || [], topFollowQuery.data || [], ratingQuery.data || []),
+    [ratingQuery.data, topFollowQuery.data, topViewQuery.data],
   )
-  const isLoading = topViewQuery.isLoading || topFollowQuery.isLoading
-  const hasError = topViewQuery.isError || topFollowQuery.isError
+  const isLoading = topViewQuery.isLoading || topFollowQuery.isLoading || ratingQuery.isLoading
+  const hasError = topViewQuery.isError || topFollowQuery.isError || ratingQuery.isError
 
   useEffect(() => {
     if (doctorRows.length === 0) {
@@ -334,7 +529,7 @@ export function AdminReportsPage() {
   }
 
   const handleExportPdf = () => {
-    exportPdf(sortedRows, `doctor-performance-${from}-to-${to}.pdf`)
+    void createPdf(sortedRows)
   }
 
   const chartLegend = [
@@ -461,7 +656,9 @@ export function AdminReportsPage() {
                     <strong>{activeDoctor ? activeDoctor.rating.toFixed(1) : '--'}{activeDoctor ? <span> / 5</span> : null}</strong>
                     {activeDoctor ? <span className="reports-summary-card__trend is-up">↑ {formatTrend(activeDoctor.rating - 4.6, '')}</span> : null}
                   </div>
-                  <div className="reports-summary-card__hint">so với kỳ trước</div>
+                  <div className="reports-summary-card__hint">
+                    {activeDoctor ? `${formatNumber(activeDoctor.ratingCount)} lượt đánh giá` : 'so với kỳ trước'}
+                  </div>
                 </div>
               </article>
             </section>
@@ -610,6 +807,7 @@ export function AdminReportsPage() {
                           <td>
                             <div className="reports-rating-cell">
                               <strong>{doctor.rating.toFixed(1)} / 5</strong>
+                              <small>{formatNumber(doctor.ratingCount)} lượt đánh giá</small>
                               <RatingStars rating={doctor.rating} />
                             </div>
                           </td>
@@ -646,6 +844,7 @@ export function AdminReportsPage() {
                 </div>
               </div>
           </section>
+
         </div>
       </div>
     </div>

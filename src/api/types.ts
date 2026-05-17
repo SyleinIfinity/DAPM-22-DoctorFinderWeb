@@ -419,3 +419,9 @@ export type AdminReportKeyword = {
   keyword: string
   count: number
 }
+
+export type DoctorRatingSummary = {
+  maBacSi: number
+  tongDanhGia: number
+  soSaoTrungBinh: number | null
+}
