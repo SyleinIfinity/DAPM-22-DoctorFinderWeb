@@ -5,7 +5,7 @@ import * as XLSX from 'xlsx'
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { api } from '../../api/http'
-import type { AdminReportDoctorRank } from '../../api/types'
+import type { AdminReportDoctorRank, DoctorRatingSummary } from '../../api/types'
 import { DoctorAvatar } from '../doctor/doctorUi'
 import '../../styles/reports.css'
 
@@ -20,6 +20,7 @@ type DoctorRow = {
   visits: number
   follows: number
   rating: number
+  ratingCount: number
   trend: number
 }
 
@@ -109,7 +110,11 @@ function exportPdf(rows: DoctorRow[], fileName: string) {
   doc.save(fileName)
 }
 
-function buildDoctorRows(views: AdminReportDoctorRank[], follows: AdminReportDoctorRank[]) {
+function buildDoctorRows(
+  views: AdminReportDoctorRank[],
+  follows: AdminReportDoctorRank[],
+  ratings: DoctorRatingSummary[],
+) {
   const map = new Map<number, Omit<DoctorRow, 'trend'>>()
 
   views.forEach((doctor) => {
@@ -120,7 +125,8 @@ function buildDoctorRows(views: AdminReportDoctorRank[], follows: AdminReportDoc
       specialty: doctor.chuyenKhoa || 'Chưa rõ',
       visits: doctor.count,
       follows: 0,
-      rating: Math.min(5, 4.1 + doctor.count / 18000),
+      rating: 0,
+      ratingCount: 0,
     })
   })
 
@@ -132,15 +138,32 @@ function buildDoctorRows(views: AdminReportDoctorRank[], follows: AdminReportDoc
       specialty: doctor.chuyenKhoa || 'Chưa rõ',
       visits: 0,
       follows: 0,
-      rating: 4.1,
+      rating: 0,
+      ratingCount: 0,
     }
 
     current.rank = Math.min(current.rank, doctor.rank)
     current.doctorName = doctor.hoTenDayDu
     current.specialty = doctor.chuyenKhoa || current.specialty
     current.follows = doctor.count
-    current.rating = Math.min(5, Math.max(current.rating, 4.1 + doctor.count / 12000))
 
+    map.set(doctor.maBacSi, current)
+  })
+
+  ratings.forEach((doctor) => {
+    const current = map.get(doctor.maBacSi) || {
+      id: doctor.maBacSi,
+      rank: Number.MAX_SAFE_INTEGER,
+      doctorName: `BS.${doctor.maBacSi}`,
+      specialty: 'Chưa rõ',
+      visits: 0,
+      follows: 0,
+      rating: 0,
+      ratingCount: 0,
+    }
+
+    current.ratingCount = doctor.tongDanhGia
+    current.rating = doctor.soSaoTrungBinh ?? 0
     map.set(doctor.maBacSi, current)
   })
 
@@ -223,12 +246,30 @@ export function AdminReportsPage() {
     queryFn: async () => (await api.get<AdminReportDoctorRank[]>('/api/admin/reports/top-doctors', { params: { ...params, metric: 'follow', limit: 20 } })).data,
   })
 
+  const doctorIds = useMemo(() => {
+    const ids = new Set<number>()
+    ;(topViewQuery.data || []).forEach((doctor) => ids.add(doctor.maBacSi))
+    ;(topFollowQuery.data || []).forEach((doctor) => ids.add(doctor.maBacSi))
+    return Array.from(ids)
+  }, [topFollowQuery.data, topViewQuery.data])
+
+  const ratingQuery = useQuery({
+    queryKey: ['admin-report-rating-summary', params.from, params.to, doctorIds.join(',')],
+    queryFn: async () => {
+      const results = await Promise.all(
+        doctorIds.map(async (doctorId) => (await api.get<DoctorRatingSummary>(`/api/doctors/${doctorId}/rating-summary`)).data),
+      )
+      return results
+    },
+    enabled: doctorIds.length > 0,
+  })
+
   const doctorRows = useMemo(
-    () => buildDoctorRows(topViewQuery.data || [], topFollowQuery.data || []),
-    [topFollowQuery.data, topViewQuery.data],
+    () => buildDoctorRows(topViewQuery.data || [], topFollowQuery.data || [], ratingQuery.data || []),
+    [ratingQuery.data, topFollowQuery.data, topViewQuery.data],
   )
-  const isLoading = topViewQuery.isLoading || topFollowQuery.isLoading
-  const hasError = topViewQuery.isError || topFollowQuery.isError
+  const isLoading = topViewQuery.isLoading || topFollowQuery.isLoading || ratingQuery.isLoading
+  const hasError = topViewQuery.isError || topFollowQuery.isError || ratingQuery.isError
 
   useEffect(() => {
     if (doctorRows.length === 0) {
@@ -461,7 +502,9 @@ export function AdminReportsPage() {
                     <strong>{activeDoctor ? activeDoctor.rating.toFixed(1) : '--'}{activeDoctor ? <span> / 5</span> : null}</strong>
                     {activeDoctor ? <span className="reports-summary-card__trend is-up">↑ {formatTrend(activeDoctor.rating - 4.6, '')}</span> : null}
                   </div>
-                  <div className="reports-summary-card__hint">so với kỳ trước</div>
+                  <div className="reports-summary-card__hint">
+                    {activeDoctor ? `${formatNumber(activeDoctor.ratingCount)} lượt đánh giá` : 'so với kỳ trước'}
+                  </div>
                 </div>
               </article>
             </section>
@@ -610,6 +653,7 @@ export function AdminReportsPage() {
                           <td>
                             <div className="reports-rating-cell">
                               <strong>{doctor.rating.toFixed(1)} / 5</strong>
+                              <small>{formatNumber(doctor.ratingCount)} lượt đánh giá</small>
                               <RatingStars rating={doctor.rating} />
                             </div>
                           </td>
