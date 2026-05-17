@@ -218,17 +218,8 @@ export function DoctorSchedulePage() {
   const deleteSelectedDayMutation = useMutation({
     mutationFn: async () => {
       if (!maBacSi) throw new Error('Thiếu mã bác sĩ')
-      const items = selectedDaySlots.map((slot) => ({
-        thuTrongTuan: slot.thuTrongTuan ?? null,
-        ngayCuThe: slot.ngayCuThe ?? detailDate,
-        gioBatDau: slot.gioBatDau,
-        gioKetThuc: slot.gioKetThuc,
-        maKhungGio: slot.maKhungGio,
-        soLuongToiDa: null,
-        trangThaiLich: slot.trangThaiLich,
-      }))
-      if (items.length === 0) throw new Error('Không có lịch để xóa.')
-      const res = await api.delete<void>(`/api/doctors/${maBacSi}/working-slots`, { data: items })
+      if (!detailDate) throw new Error('Thiếu ngày xóa.')
+      const res = await api.delete<void>(`/api/doctors/${maBacSi}/working-slots/by-date`, { params: { date: detailDate } })
       return res.data
     },
     onSuccess: async () => {
@@ -252,18 +243,8 @@ export function DoctorSchedulePage() {
   const deleteSlotMutation = useMutation({
     mutationFn: async (slot: WorkingSlot) => {
       if (!maBacSi) throw new Error('Thiếu mã bác sĩ')
-      const items = [
-        {
-          thuTrongTuan: slot.thuTrongTuan ?? null,
-          ngayCuThe: slot.ngayCuThe ?? detailDate,
-          gioBatDau: slot.gioBatDau,
-          gioKetThuc: slot.gioKetThuc,
-          maKhungGio: slot.maKhungGio,
-          soLuongToiDa: null,
-          trangThaiLich: slot.trangThaiLich,
-        },
-      ]
-      const res = await api.delete<void>(`/api/doctors/${maBacSi}/working-slots`, { data: items })
+      if (!slot.maChiTiet) throw new Error('Thiếu mã chi tiết lịch')
+      const res = await api.delete<void>(`/api/doctors/${maBacSi}/working-slots/${slot.maChiTiet}`)
       return res.data
     },
     onSuccess: async () => {
