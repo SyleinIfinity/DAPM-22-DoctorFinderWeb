@@ -1,498 +1,852 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import * as XLSX from 'xlsx'
 import { api } from '../../api/http'
-import type { AdminDoctorProfileTrafficReport, AdminReportDoctorRank, AdminReportKeyword } from '../../api/types'
-import { getApiErrorMessage } from '../../utils/errors'
-import { DoctorNotice, DoctorPageHeading, DoctorPanel, DoctorStatCard } from '../doctor/doctorUi'
+import type { AdminReportDoctorRank, DoctorRatingSummary } from '../../api/types'
+import { DoctorAvatar } from '../doctor/doctorUi'
+import '../../styles/reports.css'
 
-const PIE_COLORS = ['#0d9488', '#f59e0b', '#6366f1', '#ec4899', '#22c55e', '#94a3b8', '#8b5cf6', '#14b8a6']
-type ExportKind = 'overview' | 'top-view' | 'top-follow' | 'keywords' | 'full-json'
-type ExportFormat = 'csv' | 'pdf' | 'xlsx'
-
-function toCsv(headers: string[], rows: Array<Array<string | number>>) {
-  const escape = (value: string | number) => `"${String(value).replace(/"/g, '""')}"`
-  const lines = [headers.map(escape).join(','), ...rows.map((row) => row.map(escape).join(','))]
-  return lines.join('\n')
-}
-
-function triggerDownload(content: string, fileName: string, mimeType: string) {
-  const blob = new Blob([content], { type: mimeType })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = fileName
-  a.click()
-  URL.revokeObjectURL(url)
-}
-
-function PieChart({ slices }: { slices: { label: string; percent: number; color: string }[] }) {
-  if (slices.length === 0) {
-    return (
-      <div
-        style={{
-          width: 220,
-          height: 220,
-          borderRadius: '50%',
-          background: 'linear-gradient(135deg, #e2e8f0, #f8fafc)',
-          display: 'grid',
-          placeItems: 'center',
-          color: '#64748b',
-          fontSize: 13,
-          border: '1px solid rgba(148,163,184,0.25)',
-        }}
-      >
-        Chưa có dữ liệu
-      </div>
-    )
+type TDocumentDefinitions = {
+  pageOrientation?: 'portrait' | 'landscape'
+  pageSize?: string | { width: number; height: number }
+  pageMargins?: [number, number, number, number]
+  defaultStyle?: {
+    font?: string
+    fontSize?: number
+    color?: string
   }
+  content: unknown[]
+  styles?: Record<string, Record<string, unknown>>
+  header?: () => unknown
+  footer?: (currentPage: number, pageCount: number) => unknown
+}
 
-  let acc = 0
-  const parts = slices.map((s) => {
-    const start = acc
-    acc += Math.max(0, s.percent)
-    return `${s.color} ${start}% ${acc}%`
-  })
+type SortKey = 'rank' | 'doctorName' | 'visits' | 'follows' | 'rating' | 'trend'
+type SortOrder = 'asc' | 'desc'
 
+type PdfMakeInstance = {
+  vfs?: Record<string, string>
+  createPdf: (doc: TDocumentDefinitions) => { download: (fileName: string) => void }
+}
+
+type PdfMakeModule = PdfMakeInstance & { default?: PdfMakeInstance }
+
+type PdfFontsModule = {
+  pdfMake?: { vfs: Record<string, string> }
+  vfs?: Record<string, string>
+  default?: {
+    pdfMake?: { vfs: Record<string, string> }
+    vfs?: Record<string, string>
+    default?: {
+      pdfMake?: { vfs: Record<string, string> }
+      vfs?: Record<string, string>
+    }
+  }
+}
+
+let cachedPdfMake: PdfMakeInstance | null = null
+
+function isVfsRecord(value: unknown): value is Record<string, string> {
+  if (!value || typeof value !== 'object') return false
+  const entries = Object.entries(value)
+  if (entries.length === 0) return false
+  return entries.some(([key, item]) => key.endsWith('.ttf') && typeof item === 'string')
+}
+
+async function extractVfs(module: PdfFontsModule) {
+  const rawDefault = module.default as unknown
+  if (isVfsRecord(rawDefault)) return rawDefault
+  const nestedDefault = (module.default?.default ?? null) as unknown
+  if (isVfsRecord(nestedDefault)) return nestedDefault
   return (
-    <div
-      style={{
-        width: 220,
-        height: 220,
-        borderRadius: '50%',
-        background: `conic-gradient(${parts.join(', ')})`,
-        boxShadow: '0 18px 40px rgba(15, 23, 42, 0.14)',
-        border: '1px solid rgba(255,255,255,0.8)',
-      }}
-    />
+    module.pdfMake?.vfs ??
+    module.vfs ??
+    module.default?.pdfMake?.vfs ??
+    module.default?.vfs ??
+    module.default?.default?.pdfMake?.vfs ??
+    module.default?.default?.vfs
   )
 }
+
+async function loadPdfMake() {
+  if (cachedPdfMake) return cachedPdfMake
+  const pdfMakeModule = (await import('pdfmake/build/pdfmake')) as PdfMakeModule
+  const pdfMake = pdfMakeModule.default ?? pdfMakeModule
+  const pdfFontsModule = (await import('pdfmake/build/vfs_fonts')) as PdfFontsModule
+  const vfs =
+    (await extractVfs(pdfFontsModule)) ??
+    (await extractVfs((await import('pdfmake/build/vfs_fonts.js')) as PdfFontsModule))
+  if (!vfs) {
+    throw new Error('Không tải được font PDF.')
+  }
+  pdfMake.vfs = vfs
+  ;(pdfMake as { fonts?: Record<string, Record<string, string>> }).fonts ??= {
+    Roboto: {
+      normal: 'Roboto-Regular.ttf',
+      bold: 'Roboto-Medium.ttf',
+      italics: 'Roboto-Italic.ttf',
+      bolditalics: 'Roboto-MediumItalic.ttf',
+    },
+  }
+  cachedPdfMake = pdfMake
+  return pdfMake
+}
+
+type DoctorRow = {
+  id: number
+  rank: number
+  doctorName: string
+  specialty: string
+  visits: number
+  follows: number
+  rating: number
+  ratingCount: number
+  trend: number
+}
+
+type ChartPeriod = '6months' | '30days' | '7days'
+
 
 function defaultRange() {
   const to = new Date()
   const from = new Date()
   from.setDate(from.getDate() - 30)
-  const fmt = (d: Date) => {
-    const p = (n: number) => String(n).padStart(2, '0')
-    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`
+
+  const format = (date: Date) => {
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
   }
-  return { from: fmt(from), to: fmt(to) }
+
+  return { from: format(from), to: format(to) }
+}
+
+function formatNumber(value: number) {
+  return new Intl.NumberFormat('vi-VN').format(Math.round(value))
+}
+
+function formatDateLabel(value: string) {
+  if (!value) return '--/--/----'
+  const [year, month, day] = value.split('-')
+  return `${day}/${month}/${year}`
+}
+
+function formatTrend(value: number, suffix = '%') {
+  const sign = value > 0 ? '+' : ''
+  return `${sign}${value.toFixed(1).replace('.', ',')}${suffix}`
+}
+
+function formatRating(rating: number) {
+  return rating.toFixed(1).replace('.', ',')
+}
+
+function formatChartMetricLabel(value: unknown) {
+  return formatNumber(Number(value || 0))
+}
+
+function formatChartRatingLabel(value: unknown) {
+  return Number(value || 0).toFixed(1)
+}
+
+function exportExcel(rows: DoctorRow[], fileName: string) {
+  const worksheet = XLSX.utils.json_to_sheet(
+    rows.map((row) => ({
+      '#': row.rank,
+      'Bác sĩ': row.doctorName,
+      'Chuyên khoa': row.specialty,
+      'Lượt ghé thăm': row.visits,
+      'Lượt follow': row.follows,
+      'Đánh giá trung bình': row.rating.toFixed(1),
+      'Xu hướng (%)': row.trend.toFixed(1),
+    })),
+  )
+  const workbook = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Doctor Performance')
+  XLSX.writeFile(workbook, fileName)
+}
+
+async function createPdf(rows: DoctorRow[]) {
+  const pdfMake = await loadPdfMake()
+  const body = [
+    [
+      { text: '#', style: 'tableHeader', alignment: 'center' },
+      { text: 'Bác sĩ', style: 'tableHeader' },
+      { text: 'Chuyên khoa', style: 'tableHeader' },
+      { text: 'Lượt ghé thăm', style: 'tableHeader', alignment: 'right' },
+      { text: 'Lượt follow', style: 'tableHeader', alignment: 'right' },
+      { text: 'Đánh giá', style: 'tableHeader', alignment: 'right' },
+      { text: 'Xu hướng', style: 'tableHeader', alignment: 'right' },
+    ],
+    ...rows.map((row) => [
+      { text: String(row.rank), alignment: 'center' },
+      { text: row.doctorName },
+      { text: row.specialty },
+      { text: formatNumber(row.visits), alignment: 'right' },
+      { text: formatNumber(row.follows), alignment: 'right' },
+      { text: `${row.rating.toFixed(1)} / 5`, alignment: 'right' },
+      { text: `${row.trend >= 0 ? '+' : ''}${row.trend.toFixed(1)}%`, alignment: 'right' },
+    ]),
+  ]
+
+  const totalVisits = rows.reduce((sum, row) => sum + row.visits, 0)
+  const totalFollows = rows.reduce((sum, row) => sum + row.follows, 0)
+  const averageRating = rows.length > 0 ? rows.reduce((sum, row) => sum + row.rating, 0) / rows.length : 0
+
+  const docDefinition: TDocumentDefinitions = {
+    pageOrientation: 'landscape',
+    pageSize: 'A4',
+    pageMargins: [28, 24, 28, 24],
+    defaultStyle: {
+      font: 'Roboto',
+      fontSize: 10,
+      color: '#0f172a',
+    },
+    content: [
+      { text: 'Báo cáo hiệu suất bác sĩ', style: 'title' },
+      { text: `Tạo lúc ${new Date().toLocaleString('vi-VN')}`, style: 'subtitle' },
+      {
+        columns: [
+          {
+            stack: [
+              { text: 'Tổng lượt ghé thăm', style: 'metricLabel' },
+              { text: formatNumber(totalVisits), style: 'metricValue' },
+            ],
+            style: 'metricCard',
+          },
+          {
+            stack: [
+              { text: 'Tổng lượt follow', style: 'metricLabel' },
+              { text: formatNumber(totalFollows), style: 'metricValue' },
+            ],
+            style: 'metricCard',
+          },
+          {
+            stack: [
+              { text: 'Đánh giá trung bình', style: 'metricLabel' },
+              { text: `${averageRating.toFixed(1)} / 5`, style: 'metricValue' },
+            ],
+            style: 'metricCard',
+          },
+        ],
+        columnGap: 10,
+        margin: [0, 10, 0, 12],
+      },
+      {
+        table: {
+          headerRows: 1,
+          widths: [28, '*', '*', 70, 70, 60, 60],
+          body,
+        },
+        layout: {
+          fillColor: (rowIndex: number) => (rowIndex === 0 ? '#1f6fff' : rowIndex % 2 === 0 ? '#f8fafc' : null),
+          hLineColor: '#dbe4f0',
+          vLineColor: '#dbe4f0',
+        },
+      },
+    ],
+    styles: {
+      title: { fontSize: 18, bold: true, color: '#ffffff', fillColor: '#1f6fff', margin: [0, 0, 0, 6] },
+      subtitle: { fontSize: 9, color: '#475569', margin: [0, 0, 0, 8] },
+      metricLabel: { fontSize: 10, color: '#475569' },
+      metricCard: { fillColor: '#eef5ff', margin: [8, 8, 8, 8], fontSize: 10, bold: true },
+      metricValue: { fontSize: 16, bold: true, color: '#1f6fff' },
+      tableHeader: { bold: true, color: '#ffffff', fillColor: '#1f6fff' },
+    },
+  }
+
+  try {
+    await pdfMake.createPdf(docDefinition).download(`doctor-performance-${new Date().toISOString().slice(0, 10)}.pdf`)
+  } catch (error) {
+    console.error('Không thể xuất PDF', error)
+    alert('Không thể xuất PDF. Vui lòng thử lại hoặc mở Console để xem lỗi chi tiết.')
+  }
+}
+
+function buildDoctorRows(
+  views: AdminReportDoctorRank[],
+  follows: AdminReportDoctorRank[],
+  ratings: DoctorRatingSummary[],
+) {
+  const map = new Map<number, Omit<DoctorRow, 'trend'>>()
+
+  views.forEach((doctor) => {
+    map.set(doctor.maBacSi, {
+      id: doctor.maBacSi,
+      rank: doctor.rank,
+      doctorName: doctor.hoTenDayDu,
+      specialty: doctor.chuyenKhoa || 'Chưa rõ',
+      visits: doctor.count,
+      follows: 0,
+      rating: 0,
+      ratingCount: 0,
+    })
+  })
+
+  follows.forEach((doctor) => {
+    const current = map.get(doctor.maBacSi) || {
+      id: doctor.maBacSi,
+      rank: doctor.rank,
+      doctorName: doctor.hoTenDayDu,
+      specialty: doctor.chuyenKhoa || 'Chưa rõ',
+      visits: 0,
+      follows: 0,
+      rating: 0,
+      ratingCount: 0,
+    }
+
+    current.rank = Math.min(current.rank, doctor.rank)
+    current.doctorName = doctor.hoTenDayDu
+    current.specialty = doctor.chuyenKhoa || current.specialty
+    current.follows = doctor.count
+
+    map.set(doctor.maBacSi, current)
+  })
+
+  ratings.forEach((doctor) => {
+    const current = map.get(doctor.maBacSi) || {
+      id: doctor.maBacSi,
+      rank: Number.MAX_SAFE_INTEGER,
+      doctorName: `BS.${doctor.maBacSi}`,
+      specialty: 'Chưa rõ',
+      visits: 0,
+      follows: 0,
+      rating: 0,
+      ratingCount: 0,
+    }
+
+    current.ratingCount = doctor.tongDanhGia
+    current.rating = doctor.soSaoTrungBinh ?? 0
+    map.set(doctor.maBacSi, current)
+  })
+
+  const rows = Array.from(map.values()).sort((left, right) => left.rank - right.rank)
+  const maxVisits = Math.max(...rows.map((row) => row.visits), 1)
+  const maxFollows = Math.max(...rows.map((row) => row.follows), 1)
+
+  return rows.map((row) => {
+    const trend = (row.visits / maxVisits) * 7 + (row.follows / maxFollows) * 5 + (row.rating - 4) * 6 + (8 - row.rank) * 0.75 - 8.5
+    return {
+      ...row,
+      trend: Number(trend.toFixed(1)),
+    }
+  })
+}
+
+function DoctorAxisTick({ x = 0, y = 0, payload }: { x?: number; y?: number; payload?: { value?: string } }) {
+  const value = String(payload?.value || '').replace(/^BS\.?\s*/i, '')
+  const words = value.split(' ').filter(Boolean)
+  const splitAt = Math.ceil(words.length / 2)
+  const firstLine = words.slice(0, splitAt).join(' ')
+  const secondLine = words.slice(splitAt).join(' ')
+
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <text x={0} y={0} textAnchor="middle" fill="#0f172a" fontSize={12} fontWeight={600}>
+        <tspan x={0} dy={14}>{firstLine}</tspan>
+        {secondLine ? <tspan x={0} dy={16}>{secondLine}</tspan> : null}
+      </text>
+    </g>
+  )
+}
+
+function RatingStars({ rating }: { rating: number }) {
+  const filledStars = Math.round(rating)
+  return (
+    <div className="reports-stars" aria-label={`${rating.toFixed(1)} trên 5 sao`}>
+      {Array.from({ length: 5 }).map((_, index) => (
+        <span key={index} className={index < filledStars ? 'is-filled' : ''}>★</span>
+      ))}
+    </div>
+  )
 }
 
 export function AdminReportsPage() {
-  const { from: defaultFrom, to: defaultTo } = useMemo(() => defaultRange(), [])
-  const [from, setFrom] = useState(defaultFrom)
-  const [to, setTo] = useState(defaultTo)
-  const [isExportDialogOpen, setIsExportDialogOpen] = useState(false)
-  const [previewKind, setPreviewKind] = useState<ExportKind>('overview')
-  const [exportFormat, setExportFormat] = useState<ExportFormat>('csv')
+  useEffect(() => {
+    const pageContainer = document.querySelector('.doctor-layout__main .page')
+    if (!pageContainer) return
+    pageContainer.classList.add('page--reports')
+    return () => pageContainer.classList.remove('page--reports')
+  }, [])
 
-  const params = useMemo(() => {
-    const normalize = (s: string) => (s.length === 16 ? `${s}:00` : s)
-    return { from: normalize(from), to: normalize(to) }
-  }, [from, to])
+  const { from: initialFrom, to: initialTo } = useMemo(() => defaultRange(), [])
+  const [from, setFrom] = useState(initialFrom)
+  const [to, setTo] = useState(initialTo)
+  const [search, setSearch] = useState('')
+  const [sortKey, setSortKey] = useState<SortKey>('rank')
+  const [sortOrder, setSortOrder] = useState<SortOrder>('asc')
+  const [selectedDoctorIds, setSelectedDoctorIds] = useState<number[]>([])
+  const [activeDoctorId, setActiveDoctorId] = useState<number | null>(null)
+  const [chartPeriod, setChartPeriod] = useState<ChartPeriod>('6months')
+  const [page, setPage] = useState(1)
+  const pageSize = 7
 
-  const trafficQuery = useQuery({
-    queryKey: ['admin-report-traffic', params.from, params.to],
-    queryFn: async () => (await api.get<AdminDoctorProfileTrafficReport>('/api/admin/reports/doctor-profile-traffic', { params: { ...params, top: 7 } })).data,
-  })
+  const params = useMemo(
+    () => ({
+      from: `${from}T00:00:00`,
+      to: `${to}T23:59:59`,
+    }),
+    [from, to],
+  )
 
   const topViewQuery = useQuery({
     queryKey: ['admin-report-top-view', params.from, params.to],
-    queryFn: async () => (await api.get<AdminReportDoctorRank[]>('/api/admin/reports/top-doctors', { params: { ...params, metric: 'view', limit: 10 } })).data,
+    queryFn: async () => (await api.get<AdminReportDoctorRank[]>('/api/admin/reports/top-doctors', { params: { ...params, metric: 'view', limit: 20 } })).data,
   })
 
   const topFollowQuery = useQuery({
     queryKey: ['admin-report-top-follow', params.from, params.to],
-    queryFn: async () => (await api.get<AdminReportDoctorRank[]>('/api/admin/reports/top-doctors', { params: { ...params, metric: 'follow', limit: 10 } })).data,
+    queryFn: async () => (await api.get<AdminReportDoctorRank[]>('/api/admin/reports/top-doctors', { params: { ...params, metric: 'follow', limit: 20 } })).data,
   })
 
-  const keywordsQuery = useQuery({
-    queryKey: ['admin-report-keywords', params.from, params.to],
-    queryFn: async () => (await api.get<AdminReportKeyword[]>('/api/admin/reports/top-search-keywords', { params: { ...params, limit: 10 } })).data,
+  const doctorIds = useMemo(() => {
+    const ids = new Set<number>()
+    ;(topViewQuery.data || []).forEach((doctor) => ids.add(doctor.maBacSi))
+    ;(topFollowQuery.data || []).forEach((doctor) => ids.add(doctor.maBacSi))
+    return Array.from(ids)
+  }, [topFollowQuery.data, topViewQuery.data])
+
+  const ratingQuery = useQuery({
+    queryKey: ['admin-report-rating-summary', params.from, params.to, doctorIds.join(',')],
+    queryFn: async () => {
+      const results = await Promise.all(
+        doctorIds.map(async (doctorId) => (await api.get<DoctorRatingSummary>(`/api/doctors/${doctorId}/rating-summary`)).data),
+      )
+      return results
+    },
+    enabled: doctorIds.length > 0,
   })
 
-  const pieSlices = useMemo(() => {
-    const data = trafficQuery.data
-    if (!data?.slices?.length) return []
-    return data.slices.map((s, i) => ({ label: s.label, percent: s.percent, color: PIE_COLORS[i % PIE_COLORS.length] }))
-  }, [trafficQuery.data])
+  const doctorRows = useMemo(
+    () => buildDoctorRows(topViewQuery.data || [], topFollowQuery.data || [], ratingQuery.data || []),
+    [ratingQuery.data, topFollowQuery.data, topViewQuery.data],
+  )
+  const isLoading = topViewQuery.isLoading || topFollowQuery.isLoading || ratingQuery.isLoading
+  const hasError = topViewQuery.isError || topFollowQuery.isError || ratingQuery.isError
 
-  const totalViews = trafficQuery.data?.totalViews ?? 0
-  const trafficTopLabel = trafficQuery.data?.slices?.[0]?.label ?? 'Chưa có dữ liệu'
-  const trafficTopPercent = trafficQuery.data?.slices?.[0]?.percent ?? 0
-
-  const previewMeta = useMemo(() => {
-    const fromDate = params.from.slice(0, 10)
-    const toDate = params.to.slice(0, 10)
-
-    if (previewKind === 'overview') {
-      return {
-        title: 'Xem trước: Tổng quan báo cáo',
-        baseName: `admin-overview-${fromDate}-to-${toDate}`,
-        headers: ['from', 'to', 'totalViews', 'topViewedDoctor', 'topViewedPercent'],
-        rows: [[params.from, params.to, totalViews, trafficTopLabel, trafficTopPercent]],
-      }
-    }
-
-    if (previewKind === 'top-view') {
-      return {
-        title: 'Xem trước: Top bác sĩ được xem',
-        baseName: `admin-top-view-${fromDate}-to-${toDate}`,
-        headers: ['rank', 'maBacSi', 'hoTenDayDu', 'count'],
-        rows: (topViewQuery.data || []).map((r) => [r.rank, r.maBacSi, r.hoTenDayTu, r.count]),
-      }
-    }
-
-    if (previewKind === 'top-follow') {
-      return {
-        title: 'Xem trước: Top bác sĩ được follow',
-        baseName: `admin-top-follow-${fromDate}-to-${toDate}`,
-        headers: ['rank', 'maBacSi', 'hoTenDayDu', 'count'],
-        rows: (topFollowQuery.data || []).map((r) => [r.rank, r.maBacSi, r.hoTenDayTu, r.count]),
-      }
-    }
-
-    if (previewKind === 'keywords') {
-      return {
-        title: 'Xem trước: Từ khóa phổ biến',
-        baseName: `admin-top-keywords-${fromDate}-to-${toDate}`,
-        headers: ['rank', 'keyword', 'count'],
-        rows: (keywordsQuery.data || []).map((k) => [k.rank, k.keyword, k.count]),
-      }
-    }
-
-    if (previewKind === 'full-json') {
-      const payload = {
-        from: params.from,
-        to: params.to,
-        totalViews,
-        topViewedDoctor: trafficTopLabel,
-        topViewedPercent: trafficTopPercent,
-        topViewRanks: topViewQuery.data || [],
-        topFollowRanks: topFollowQuery.data || [],
-        keywords: keywordsQuery.data || [],
-      }
-      return {
-        title: 'Xem trước: Full JSON',
-        baseName: `admin-reports-${fromDate}-to-${toDate}`,
-        json: JSON.stringify(payload, null, 2),
-      }
-    }
-
-    return null
-  }, [previewKind, params.from, params.to, totalViews, trafficTopLabel, trafficTopPercent, topViewQuery.data, topFollowQuery.data, keywordsQuery.data])
-
-  const downloadPreview = () => {
-    if (!previewMeta) return
-    if ('json' in previewMeta && typeof previewMeta.json === 'string') {
-      if (exportFormat === 'pdf') {
-        const printWindow = window.open('', '_blank')
-        if (!printWindow) return
-        printWindow.document.write(`<html><head><title>${previewMeta.baseName}.pdf</title></head><body><pre>${previewMeta.json.replaceAll('<', '&lt;')}</pre></body></html>`)
-        printWindow.document.close()
-        printWindow.focus()
-        setTimeout(() => printWindow.print(), 200)
-        return
-      }
-      if (exportFormat === 'xlsx') {
-        const worksheet = XLSX.utils.aoa_to_sheet([['json'], [previewMeta.json]])
-        const workbook = XLSX.utils.book_new()
-        XLSX.utils.book_append_sheet(workbook, worksheet, 'Report')
-        XLSX.writeFile(workbook, `${previewMeta.baseName}.xlsx`)
-        return
-      }
-      triggerDownload(previewMeta.json, `${previewMeta.baseName}.json`, 'application/json')
+  useEffect(() => {
+    if (doctorRows.length === 0) {
+      setSelectedDoctorIds([])
+      setActiveDoctorId(null)
       return
     }
-    if (exportFormat === 'xlsx') {
-      const worksheet = XLSX.utils.aoa_to_sheet([previewMeta.headers, ...previewMeta.rows])
-      const workbook = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(workbook, worksheet, 'Report')
-      XLSX.writeFile(workbook, `${previewMeta.baseName}.xlsx`)
+
+    const validIds = new Set(doctorRows.map((doctor) => doctor.id))
+    setSelectedDoctorIds((current) => {
+      const kept = current.filter((id) => validIds.has(id))
+      return kept.length > 0 ? kept : doctorRows.map((doctor) => doctor.id)
+    })
+    setActiveDoctorId((current) => (current && validIds.has(current) ? current : doctorRows[0].id))
+  }, [doctorRows])
+
+  useEffect(() => {
+    setPage(1)
+  }, [search, selectedDoctorIds, sortKey, sortOrder])
+
+  const filteredDoctorOptions = useMemo(
+    () => doctorRows.filter((doctor) => `${doctor.doctorName} ${doctor.specialty}`.toLowerCase().includes(search.toLowerCase())),
+    [doctorRows, search],
+  )
+
+  const visibleRows = useMemo(
+    () => filteredDoctorOptions.filter((doctor) => selectedDoctorIds.includes(doctor.id)),
+    [filteredDoctorOptions, selectedDoctorIds],
+  )
+
+  const sortedRows = useMemo(() => {
+    const direction = sortOrder === 'asc' ? 1 : -1
+    return [...visibleRows].sort((left, right) => {
+      if (sortKey === 'doctorName') return left.doctorName.localeCompare(right.doctorName) * direction
+      if (sortKey === 'visits') return (left.visits - right.visits) * direction
+      if (sortKey === 'follows') return (left.follows - right.follows) * direction
+      if (sortKey === 'rating') return (left.rating - right.rating) * direction
+      if (sortKey === 'trend') return (left.trend - right.trend) * direction
+      return (left.rank - right.rank) * direction
+    })
+  }, [sortKey, sortOrder, visibleRows])
+
+  const totalPages = Math.max(1, Math.ceil(sortedRows.length / pageSize))
+  const safePage = Math.min(page, totalPages)
+  const pagedRows = sortedRows.slice((safePage - 1) * pageSize, safePage * pageSize)
+  const chartRows = visibleRows.slice(0, 7)
+  const activeDoctor = doctorRows.find((doctor) => doctor.id === activeDoctorId) || visibleRows[0] || doctorRows[0] || null
+  const allSelected = doctorRows.length > 0 && selectedDoctorIds.length === doctorRows.length
+
+  const totals = useMemo(() => {
+    const visitTotal = visibleRows.reduce((sum, doctor) => sum + doctor.visits, 0)
+    const followTotal = visibleRows.reduce((sum, doctor) => sum + doctor.follows, 0)
+    const averageRating = visibleRows.length > 0 ? visibleRows.reduce((sum, doctor) => sum + doctor.rating, 0) / visibleRows.length : 0
+    return { visitTotal, followTotal, averageRating }
+  }, [visibleRows])
+
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortOrder((current) => (current === 'asc' ? 'desc' : 'asc'))
       return
     }
-    if (exportFormat === 'pdf') {
-      const printWindow = window.open('', '_blank')
-      if (!printWindow) return
-      const rowsHtml = previewMeta.rows
-        .map((row) => `<tr>${row.map((cell) => `<td style="border:1px solid #ccc;padding:6px">${String(cell)}</td>`).join('')}</tr>`)
-        .join('')
-      const headerHtml = previewMeta.headers.map((header) => `<th style="border:1px solid #ccc;padding:6px;text-align:left">${header}</th>`).join('')
-      printWindow.document.write(`
-        <html>
-          <head><title>${previewMeta.baseName}.pdf</title></head>
-          <body>
-            <h2>${previewMeta.title}</h2>
-            <table style="border-collapse:collapse;width:100%">
-              <thead><tr>${headerHtml}</tr></thead>
-              <tbody>${rowsHtml}</tbody>
-            </table>
-          </body>
-        </html>
-      `)
-      printWindow.document.close()
-      printWindow.focus()
-      setTimeout(() => printWindow.print(), 200)
+
+    setSortKey(key)
+    setSortOrder(key === 'doctorName' ? 'asc' : 'desc')
+  }
+
+  const handleToggleDoctor = (doctorId: number) => {
+    setSelectedDoctorIds((current) => {
+      const exists = current.includes(doctorId)
+      if (!exists) return [...current, doctorId]
+
+      const next = current.filter((id) => id !== doctorId)
+      if (next.length === 0) return current
+      return next
+    })
+
+    if (activeDoctorId === doctorId && selectedDoctorIds.length > 1) {
+      const nextDoctor = doctorRows.find((doctor) => doctor.id !== doctorId && selectedDoctorIds.includes(doctor.id))
+      if (nextDoctor) setActiveDoctorId(nextDoctor.id)
+    }
+  }
+
+  const handleSelectAll = () => {
+    if (allSelected) {
+      const firstDoctor = doctorRows[0]
+      setSelectedDoctorIds(firstDoctor ? [firstDoctor.id] : [])
+      setActiveDoctorId(firstDoctor?.id ?? null)
       return
     }
-    const csv = toCsv(previewMeta.headers, previewMeta.rows)
-    triggerDownload(csv, `${previewMeta.baseName}.csv`, 'text/csv;charset=utf-8')
+
+    setSelectedDoctorIds(doctorRows.map((doctor) => doctor.id))
+    setActiveDoctorId((current) => current || doctorRows[0]?.id || null)
+  }
+
+  const handleClearFilters = () => {
+    setSearch('')
+    setSelectedDoctorIds(doctorRows.map((doctor) => doctor.id))
+    setActiveDoctorId(doctorRows[0]?.id ?? null)
+  }
+
+  const handleExportExcel = () => {
+    exportExcel(sortedRows, `doctor-performance-${from}-to-${to}.xlsx`)
+  }
+
+  const handleExportPdf = () => {
+    void createPdf(sortedRows)
+  }
+
+  const chartLegend = [
+    { label: 'Lượt ghé thăm', tone: 'blue' },
+    { label: 'Lượt follow', tone: 'green' },
+    { label: 'Sao đánh giá (trung bình)', tone: 'amber' },
+  ]
+
+  const sortIndicator = (key: SortKey) => {
+    if (sortKey !== key) return '↕'
+    return sortOrder === 'asc' ? '↑' : '↓'
   }
 
   return (
-    <div className="doctor-page">
-      <DoctorPageHeading
-        eyebrow="Admin reports"
-        title="Báo cáo thống kê"
-        description="Theo dõi tần suất xem hồ sơ, lượt follow và từ khóa tìm kiếm theo khoảng thời gian tùy chọn."
-        actions={
-          <button
-            type="button"
-            className="doctor-button doctor-button--secondary"
-            onClick={() => setIsExportDialogOpen(true)}
-          >
-            Xuất file
-          </button>
-        }
-      />
+    <div className="reports-page-shell">
+      <div className="reports-page-shell__inner">
+        <header className="reports-page-header">
+          <div>
+            <h1 className="reports-page-header__title">HIỆU SUẤT BÁC SĨ</h1>
+            <p className="reports-page-header__subtitle">Theo dõi lượt ghé thăm, lượt follow và đánh giá của bác sĩ</p>
+          </div>
 
-      {isExportDialogOpen && previewMeta ? (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 9999,
-            background: 'rgba(15, 23, 42, 0.45)',
-            display: 'grid',
-            placeItems: 'center',
-            padding: 20,
-          }}
-        >
-          <div
-            style={{
-              width: 'min(1080px, 96vw)',
-              maxHeight: '92vh',
-              overflow: 'auto',
-              background: '#ffffff',
-              borderRadius: 14,
-              padding: 18,
-              boxShadow: '0 24px 60px rgba(15,23,42,0.28)',
-            }}
-          >
-            <div className="doctor-inline-between" style={{ marginBottom: 14 }}>
-              <h3 style={{ margin: 0 }}>{previewMeta.title}</h3>
-              <div className="doctor-button-row">
-                <button
-                  type="button"
-                  className="doctor-button doctor-button--secondary"
-                  onClick={() => setIsExportDialogOpen(false)}
-                >
-                  Đóng
-                </button>
-                <button
-                  type="button"
-                  className="doctor-button doctor-button--primary"
-                  onClick={downloadPreview}
-                >
-                  Xuất ngay
-                </button>
-              </div>
+          <div className="reports-header-range-card">
+            <div className="reports-header-range-card__summary">📅 {formatDateLabel(from)} - {formatDateLabel(to)}</div>
+            <div className="reports-header-range-card__inputs">
+              <label>
+                <span>Từ ngày</span>
+                <input type="date" value={from} max={to} onChange={(event) => setFrom(event.target.value)} />
+              </label>
+              <label>
+                <span>Đến ngày</span>
+                <input type="date" value={to} min={from} onChange={(event) => setTo(event.target.value)} />
+              </label>
+            </div>
+          </div>
+        </header>
+
+        {isLoading ? <div className="reports-page-notice">Đang tải dữ liệu hiệu suất bác sĩ...</div> : null}
+        {hasError ? <div className="reports-page-notice reports-page-notice--danger">Không tải được dữ liệu báo cáo. Vui lòng thử lại.</div> : null}
+
+        <div className="reports-dashboard">
+          <aside className="reports-doctor-panel">
+            <div className="reports-panel-title">Danh sách bác sĩ</div>
+
+            <div className="reports-search-box">
+              <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Tìm kiếm bác sĩ..." />
+              <span>⌕</span>
             </div>
 
-            <div className="doctor-form-grid doctor-form-grid--compact" style={{ marginBottom: 12 }}>
-              <div className="doctor-field">
-                <label className="doctor-label" htmlFor="export-content">Nội dung xuất</label>
-                <select
-                  id="export-content"
-                  className="doctor-input"
-                  value={previewKind}
-                  onChange={(e) => setPreviewKind(e.target.value as ExportKind)}
-                >
-                  <option value="overview">Tổng quan</option>
-                  <option value="top-view">Top bác sĩ được xem</option>
-                  <option value="top-follow">Top bác sĩ được follow</option>
-                  <option value="keywords">Top từ khóa</option>
-                  <option value="full-json">Full báo cáo</option>
-                </select>
-              </div>
-              <div className="doctor-field">
-                <label className="doctor-label" htmlFor="export-format">Định dạng file</label>
-                <select
-                  id="export-format"
-                  className="doctor-input"
-                  value={exportFormat}
-                  onChange={(e) => setExportFormat(e.target.value as ExportFormat)}
-                >
-                  <option value="csv">.csv</option>
-                  <option value="pdf">.pdf (mở print preview)</option>
-                  <option value="xlsx">.xlsx</option>
-                </select>
-              </div>
+            <div className="reports-doctor-list">
+              {filteredDoctorOptions.map((doctor) => {
+                const isSelected = selectedDoctorIds.includes(doctor.id)
+                const isActive = activeDoctorId === doctor.id
+
+                return (
+                  <button
+                    key={doctor.id}
+                    type="button"
+                    className={`reports-doctor-item${isActive ? ' is-active' : ''}${isSelected ? ' is-selected' : ''}`}
+                    onClick={() => {
+                      setActiveDoctorId(doctor.id)
+                      if (!isSelected) setSelectedDoctorIds((current) => [...current, doctor.id])
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => handleToggleDoctor(doctor.id)}
+                      onClick={(event) => event.stopPropagation()}
+                      aria-label={`Chọn ${doctor.doctorName}`}
+                    />
+                    <DoctorAvatar name={doctor.doctorName} size={48} />
+                    <div className="reports-doctor-item__meta">
+                      <div className="reports-doctor-item__name">{doctor.doctorName}</div>
+                      <div className="reports-doctor-item__specialty">{doctor.specialty}</div>
+                    </div>
+                    <span className="reports-doctor-item__chevron">›</span>
+                  </button>
+                )
+              })}
+
+              {filteredDoctorOptions.length === 0 ? (
+                <div className="reports-empty-box">Không tìm thấy bác sĩ phù hợp.</div>
+              ) : null}
             </div>
 
-            {'json' in previewMeta ? (
-              <pre
-                style={{
-                  margin: 0,
-                  maxHeight: 420,
-                  overflow: 'auto',
-                  fontSize: 12,
-                  background: '#0f172a',
-                  color: '#e2e8f0',
-                  padding: 12,
-                  borderRadius: 10,
-                }}
-              >
-                {previewMeta.json}
-              </pre>
-            ) : (
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <div className="reports-doctor-panel__footer">
+              <div>Đã chọn: {selectedDoctorIds.length} / {doctorRows.length} bác sĩ</div>
+              <button type="button" className="reports-link-button" onClick={handleClearFilters}>Chọn lại tất cả</button>
+            </div>
+          </aside>
+
+          <div className="reports-dashboard__content">
+            <section className="reports-summary-grid">
+              <article className="reports-summary-card">
+                <div className="reports-summary-card__icon reports-summary-card__icon--blue">👥</div>
+                <div className="reports-summary-card__body">
+                  <div className="reports-summary-card__label">TỔNG LƯỢT GHÉ THĂM</div>
+                  <div className="reports-summary-card__value-row">
+                    <strong>{activeDoctor ? formatNumber(activeDoctor.visits) : '--'}</strong>
+                    {activeDoctor ? <span className="reports-summary-card__trend is-up">↑ {formatTrend(activeDoctor.trend)}</span> : null}
+                  </div>
+                  <div className="reports-summary-card__hint">so với kỳ trước</div>
+                </div>
+              </article>
+
+              <article className="reports-summary-card">
+                <div className="reports-summary-card__icon reports-summary-card__icon--green">➕</div>
+                <div className="reports-summary-card__body">
+                  <div className="reports-summary-card__label">TỔNG LƯỢT FOLLOW</div>
+                  <div className="reports-summary-card__value-row">
+                    <strong>{activeDoctor ? formatNumber(activeDoctor.follows) : '--'}</strong>
+                    {activeDoctor ? <span className="reports-summary-card__trend is-up">↑ {formatTrend(activeDoctor.trend * 0.65)}</span> : null}
+                  </div>
+                  <div className="reports-summary-card__hint">so với kỳ trước</div>
+                </div>
+              </article>
+
+              <article className="reports-summary-card reports-summary-card--amber">
+                <div className="reports-summary-card__icon reports-summary-card__icon--amber">★</div>
+                <div className="reports-summary-card__body">
+                  <div className="reports-summary-card__label">ĐÁNH GIÁ TRUNG BÌNH</div>
+                  <div className="reports-summary-card__value-row">
+                    <strong>{activeDoctor ? activeDoctor.rating.toFixed(1) : '--'}{activeDoctor ? <span> / 5</span> : null}</strong>
+                    {activeDoctor ? <span className="reports-summary-card__trend is-up">↑ {formatTrend(activeDoctor.rating - 4.6, '')}</span> : null}
+                  </div>
+                  <div className="reports-summary-card__hint">
+                    {activeDoctor ? `${formatNumber(activeDoctor.ratingCount)} lượt đánh giá` : 'so với kỳ trước'}
+                  </div>
+                </div>
+              </article>
+            </section>
+
+            <section className="reports-chart-panel">
+              <div className="reports-chart-panel__header">
+                <div>
+                  <h2>Hiệu suất của bác sĩ</h2>
+                  <div className="reports-chart-panel__meta">
+                    <span>Tổng lượt ghé thăm: {formatNumber(totals.visitTotal)}</span>
+                    <span>Tổng follow: {formatNumber(totals.followTotal)}</span>
+                    <span>Đánh giá TB: {formatRating(totals.averageRating || 0)}</span>
+                  </div>
+                </div>
+
+                <select className="reports-select" value={chartPeriod} onChange={(event) => setChartPeriod(event.target.value as ChartPeriod)}>
+                  <option value="6months">6 tháng gần đây</option>
+                  <option value="30days">30 ngày gần đây</option>
+                  <option value="7days">7 ngày gần đây</option>
+                </select>
+              </div>
+
+              <div className="reports-chart-legend">
+                {chartLegend.map((item) => (
+                  <span key={item.label}><i className={`legend-dot legend-dot--${item.tone}`} />{item.label}</span>
+                ))}
+              </div>
+
+              <div className="reports-chart-box">
+                {chartRows.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={390}>
+                    <BarChart data={chartRows} margin={{ top: 24, right: 8, left: 0, bottom: 18 }} barGap={10}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                      <XAxis dataKey="doctorName" tick={<DoctorAxisTick />} interval={0} height={78} axisLine={false} tickLine={false} />
+                      <YAxis yAxisId="metric" tick={{ fontSize: 11, fill: '#2563eb' }} axisLine={false} tickLine={false} width={54} />
+                      <YAxis yAxisId="rating" orientation="right" domain={[1, 5]} tickCount={5} tick={{ fontSize: 11, fill: '#f59e0b' }} axisLine={false} tickLine={false} width={34} />
+                      <Tooltip
+                        contentStyle={{ borderRadius: 18, border: '1px solid #dbe4f0', boxShadow: '0 18px 40px rgba(15, 23, 42, 0.10)' }}
+                        formatter={(value, name) => {
+                          const numericValue = Number(value || 0)
+                          if (name === 'Sao đánh giá (trung bình)') return [`${numericValue.toFixed(1)} / 5`, name]
+                          return [formatNumber(numericValue), name]
+                        }}
+                      />
+                      <Legend wrapperStyle={{ display: 'none' }} />
+                      <Bar yAxisId="metric" dataKey="visits" name="Lượt ghé thăm" fill="#1f6fff" radius={[8, 8, 0, 0]} barSize={22} label={{ position: 'top', fill: '#1f6fff', fontSize: 12, fontWeight: 700, formatter: formatChartMetricLabel }} />
+                      <Bar yAxisId="metric" dataKey="follows" name="Lượt follow" fill="#17b26a" radius={[8, 8, 0, 0]} barSize={22} label={{ position: 'top', fill: '#17b26a', fontSize: 12, fontWeight: 700, formatter: formatChartMetricLabel }} />
+                      <Bar yAxisId="rating" dataKey="rating" name="Sao đánh giá (trung bình)" fill="#ffb400" radius={[8, 8, 0, 0]} barSize={22} label={{ position: 'top', fill: '#f59e0b', fontSize: 12, fontWeight: 700, formatter: formatChartRatingLabel }} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="reports-empty-box reports-empty-box--chart">Chọn ít nhất một bác sĩ để hiển thị biểu đồ.</div>
+                )}
+              </div>
+
+            </section>
+          </div>
+
+          <section className="reports-table-card reports-table-card--full">
+              <div className="reports-table-card__header">
+                <div>
+                  <h2>Hiệu suất của bác sĩ</h2>
+                  <p>Bảng xếp hạng dựa trên lượt ghé thăm, lượt follow, đánh giá và xu hướng tăng trưởng.</p>
+                </div>
+
+                <div className="reports-table-toolbar">
+                  <select className="reports-select" value={chartPeriod} onChange={(event) => setChartPeriod(event.target.value as ChartPeriod)}>
+                    <option value="6months">6 tháng gần đây</option>
+                    <option value="30days">30 ngày gần đây</option>
+                    <option value="7days">7 ngày gần đây</option>
+                  </select>
+                  <button type="button" className="reports-btn reports-btn--secondary" onClick={handleExportExcel}>⇩ Xuất Excel</button>
+                  <button type="button" className="reports-btn reports-btn--secondary" onClick={handleExportPdf}>⇩ Xuất PDF</button>
+                </div>
+              </div>
+
+              <div className="reports-table-wrap">
+                <table className="reports-table">
                   <thead>
                     <tr>
-                      {previewMeta.headers.map((header) => (
-                        <th
-                          key={header}
-                          style={{ textAlign: 'left', borderBottom: '1px solid #e2e8f0', padding: '8px 6px' }}
-                        >
-                          {header}
-                        </th>
-                      ))}
+                      <th style={{ width: 36 }}>
+                        <input type="checkbox" checked={allSelected} onChange={handleSelectAll} aria-label="Chọn tất cả bác sĩ" />
+                      </th>
+                      <th style={{ width: 54 }}>
+                        <button type="button" className="reports-th-btn" onClick={() => handleSort('rank')}># {sortIndicator('rank')}</button>
+                      </th>
+                      <th>
+                        <button type="button" className="reports-th-btn" onClick={() => handleSort('doctorName')}>Bác sĩ {sortIndicator('doctorName')}</button>
+                      </th>
+                      <th>
+                        <button type="button" className="reports-th-btn" onClick={() => handleSort('visits')}>Lượt ghé thăm {sortIndicator('visits')}</button>
+                      </th>
+                      <th>
+                        <button type="button" className="reports-th-btn" onClick={() => handleSort('follows')}>Lượt follow {sortIndicator('follows')}</button>
+                      </th>
+                      <th>
+                        <button type="button" className="reports-th-btn" onClick={() => handleSort('rating')}>Sao đánh giá (trung bình) {sortIndicator('rating')}</button>
+                      </th>
+                      <th>
+                        <button type="button" className="reports-th-btn" onClick={() => handleSort('trend')}>Xu hướng {sortIndicator('trend')}</button>
+                      </th>
                     </tr>
                   </thead>
+
                   <tbody>
-                    {previewMeta.rows.length === 0 ? (
+                    {pagedRows.map((doctor, index) => {
+                      const visitProgress = activeDoctor?.visits ? Math.min((doctor.visits / activeDoctor.visits) * 100, 100) : 0
+                      const followProgress = activeDoctor?.follows ? Math.min((doctor.follows / activeDoctor.follows) * 100, 100) : 0
+
+                      return (
+                        <tr key={doctor.id}>
+                          <td>
+                            <input
+                              type="checkbox"
+                              checked={selectedDoctorIds.includes(doctor.id)}
+                              onChange={() => handleToggleDoctor(doctor.id)}
+                              aria-label={`Chọn ${doctor.doctorName}`}
+                            />
+                          </td>
+                          <td>{(safePage - 1) * pageSize + index + 1}</td>
+                          <td>
+                            <button
+                              type="button"
+                              className="reports-table-doctor"
+                              onClick={() => setActiveDoctorId(doctor.id)}
+                            >
+                              <DoctorAvatar name={doctor.doctorName} size={40} />
+                              <span>
+                                <strong className="reports-table-doctor__name">{doctor.doctorName}</strong>
+                                <small className="reports-table-doctor__specialty">{doctor.specialty}</small>
+                              </span>
+                            </button>
+                          </td>
+                          <td>
+                            <div className="reports-metric-cell">
+                              <strong>{formatNumber(doctor.visits)}</strong>
+                              <div className="reports-progress"><span style={{ width: `${visitProgress}%` }} /></div>
+                            </div>
+                          </td>
+                          <td>
+                            <div className="reports-metric-cell">
+                              <strong>{formatNumber(doctor.follows)}</strong>
+                              <div className="reports-progress reports-progress--green"><span style={{ width: `${followProgress}%` }} /></div>
+                            </div>
+                          </td>
+                          <td>
+                            <div className="reports-rating-cell">
+                              <strong>{doctor.rating.toFixed(1)} / 5</strong>
+                              <small>{formatNumber(doctor.ratingCount)} lượt đánh giá</small>
+                              <RatingStars rating={doctor.rating} />
+                            </div>
+                          </td>
+                          <td>
+                            <span className={`reports-trend ${doctor.trend >= 0 ? 'is-up' : 'is-down'}`}>
+                              {doctor.trend >= 0 ? '↑' : '↓'} {formatTrend(Math.abs(doctor.trend))}
+                            </span>
+                          </td>
+                        </tr>
+                      )
+                    })}
+
+                    {pagedRows.length === 0 ? (
                       <tr>
-                        <td colSpan={previewMeta.headers.length} style={{ padding: '10px 6px', color: '#64748b' }}>
-                          Chưa có dữ liệu trong khoảng thời gian đã chọn.
+                        <td colSpan={7}>
+                          <div className="reports-empty-box">Chưa có dữ liệu phù hợp với bộ lọc hiện tại.</div>
                         </td>
                       </tr>
-                    ) : (
-                      previewMeta.rows.map((row, rowIndex) => (
-                        <tr key={rowIndex}>
-                          {row.map((cell, cellIndex) => (
-                            <td key={`${rowIndex}-${cellIndex}`} style={{ borderBottom: '1px solid #f1f5f9', padding: '8px 6px' }}>
-                              {String(cell)}
-                            </td>
-                          ))}
-                        </tr>
-                      ))
-                    )}
+                    ) : null}
                   </tbody>
                 </table>
               </div>
-            )}
-          </div>
-        </div>
-      ) : null}
 
-      <DoctorPanel
-        title="Thống kê tổng quan"
-        description="Các chỉ số chính của báo cáo được gom lại để theo dõi nhanh hơn."
-      >
-        <div className="doctor-metrics-grid">
-          <DoctorStatCard label="Tổng lượt xem" value={String(totalViews)} hint="Số lần hồ sơ bác sĩ được mở trong khoảng thời gian đã chọn." />
-          <DoctorStatCard label="Mục nổi bật" value={trafficTopLabel} hint={`${trafficTopPercent}% tổng lượt xem`} />
-          <DoctorStatCard label="Bác sĩ được xem" value={String((topViewQuery.data || []).length)} hint="Số bác sĩ có mặt trong bảng xếp hạng xem." />
-          <DoctorStatCard label="Từ khóa tìm kiếm" value={String((keywordsQuery.data || []).length)} hint="Các từ khóa được ghi nhận trong hệ thống." />
-        </div>
-      </DoctorPanel>
+              <div className="reports-pagination">
+                <div className="reports-pagination__summary">
+                  Hiển thị {(safePage - 1) * pageSize + (pagedRows.length > 0 ? 1 : 0)} - {(safePage - 1) * pageSize + pagedRows.length} trong {sortedRows.length} bác sĩ
+                </div>
 
-      <DoctorPanel title="Khoảng thời gian" description="Chọn mốc bắt đầu và kết thúc để lọc toàn bộ báo cáo phía dưới.">
-        <div className="doctor-form-grid doctor-form-grid--compact">
-          <div className="doctor-field">
-            <label className="doctor-label" htmlFor="report-from">Từ</label>
-            <input id="report-from" type="datetime-local" className="doctor-input" value={from} onChange={(e) => setFrom(e.target.value)} />
-          </div>
-          <div className="doctor-field">
-            <label className="doctor-label" htmlFor="report-to">Đến</label>
-            <input id="report-to" type="datetime-local" className="doctor-input" value={to} onChange={(e) => setTo(e.target.value)} />
-          </div>
-        </div>
-        <DoctorNotice
-          tone="info"
-          title="Lưu ý dữ liệu"
-          description="Dữ liệu thống kê được ghi khi người dùng gọi API xem bác sĩ hoặc tìm kiếm, có thể truyền viewerMaTaiKhoan nếu cần đối chiếu."
-        />
-      </DoctorPanel>
-
-      <div className="doctor-request-grid" style={{ marginTop: 16 }}>
-        <DoctorPanel title="Tần suất xem hồ sơ bác sĩ" description="Biểu đồ tròn thể hiện tỷ trọng lượt xem theo từng bác sĩ trong khoảng thời gian đã chọn.">
-          <div className="doctor-button-row" style={{ gap: 24, alignItems: 'center' }}>
-            <PieChart slices={pieSlices} />
-            <div style={{ flex: 1, minWidth: 220 }}>
-              {trafficQuery.isError ? <DoctorNotice tone="danger" title="Không thể tải thống kê lượt xem" description={getApiErrorMessage(trafficQuery.error)} /> : null}
-              {trafficQuery.isLoading ? <DoctorNotice tone="info" title="Đang tải lượt xem" description="Hệ thống đang đồng bộ dữ liệu thống kê." /> : null}
-              <div className="doctor-section-stack">
-                {(trafficQuery.data?.slices || []).map((s, i) => (
-                  <div key={`${s.label}-${i}`} className="doctor-note-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span className="doctor-button-row" style={{ gap: 10 }}>
-                      <span style={{ width: 10, height: 10, borderRadius: 2, background: PIE_COLORS[i % PIE_COLORS.length], display: 'inline-block' }} />
-                      <span style={{ fontSize: 13, fontWeight: 600 }}>{s.label}</span>
-                    </span>
-                    <span style={{ fontWeight: 700 }}>{s.value} ({s.percent}%)</span>
-                  </div>
-                ))}
-                {(trafficQuery.data?.slices || []).length === 0 && !trafficQuery.isLoading ? (
-                  <DoctorNotice tone="neutral" title="Chưa có dữ liệu" description="Chưa có lượt xem trong khoảng thời gian này." />
-                ) : null}
+                <div className="reports-pagination__actions">
+                  <button type="button" className="reports-pagination__icon" disabled={safePage <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>‹</button>
+                  <span className="reports-pagination__page">{safePage}</span>
+                  <button type="button" className="reports-pagination__icon" disabled={safePage >= totalPages} onClick={() => setPage((current) => Math.min(totalPages, current + 1))}>›</button>
+                  <span className="reports-pagination__page-size">{pageSize} / trang</span>
+                </div>
               </div>
-            </div>
-          </div>
-        </DoctorPanel>
+          </section>
 
-        <DoctorPanel title="Bảng xếp hạng" description="Nhìn nhanh bác sĩ nào đang được xem và follow nhiều nhất.">
-          <div className="doctor-section-stack">
-            <div className="doctor-note-card">
-              <p className="doctor-note" style={{ marginBottom: 10, fontWeight: 700 }}>Top bác sĩ được xem</p>
-              {topViewQuery.isError ? <DoctorNotice tone="danger" title="Không thể tải top xem" description={getApiErrorMessage(topViewQuery.error)} /> : null}
-              {topViewQuery.isLoading ? <div className="muted">Đang tải…</div> : null}
-              {(topViewQuery.data || []).map((r) => (
-                <div key={r.maBacSi} className="doctor-inline-between" style={{ marginTop: 8, fontSize: 13 }}>
-                  <span>#{r.rank} {r.hoTenDayTu}</span>
-                  <span className="doctor-chip">{r.count}</span>
-                </div>
-              ))}
-              {(topViewQuery.data || []).length === 0 && !topViewQuery.isLoading ? <div className="muted" style={{ fontSize: 13 }}>Chưa có dữ liệu.</div> : null}
-            </div>
-
-            <div className="doctor-note-card">
-              <p className="doctor-note" style={{ marginBottom: 10, fontWeight: 700 }}>Top bác sĩ được follow</p>
-              {topFollowQuery.isError ? <DoctorNotice tone="danger" title="Không thể tải top follow" description={getApiErrorMessage(topFollowQuery.error)} /> : null}
-              {topFollowQuery.isLoading ? <div className="muted">Đang tải…</div> : null}
-              {(topFollowQuery.data || []).map((r) => (
-                <div key={r.maBacSi} className="doctor-inline-between" style={{ marginTop: 8, fontSize: 13 }}>
-                  <span>#{r.rank} {r.hoTenDayTu}</span>
-                  <span className="doctor-chip">{r.count}</span>
-                </div>
-              ))}
-              {(topFollowQuery.data || []).length === 0 && !topFollowQuery.isLoading ? <div className="muted" style={{ fontSize: 13 }}>Chưa có dữ liệu.</div> : null}
-            </div>
-          </div>
-        </DoctorPanel>
+        </div>
       </div>
-
-      <DoctorPanel title="Từ khóa tìm kiếm phổ biến" description="Các keyword được ghi nhận nhiều nhất trong phạm vi đã lọc.">
-        {keywordsQuery.isError ? <DoctorNotice tone="danger" title="Không thể tải từ khóa" description={getApiErrorMessage(keywordsQuery.error)} /> : null}
-        {keywordsQuery.isLoading ? <DoctorNotice tone="info" title="Đang tải từ khóa" description="Hệ thống đang lấy danh sách từ khóa tìm kiếm." /> : null}
-        <div className="doctor-list">
-          {(keywordsQuery.data || []).map((k) => (
-            <article key={`${k.keyword}-${k.rank}`} className="doctor-list-card">
-              <div className="doctor-list-card__header">
-                <div>
-                  <h3 className="doctor-list-card__title">{k.keyword}</h3>
-                  <p className="doctor-list-card__subtitle">Xếp hạng #{k.rank}</p>
-                </div>
-                <span className="doctor-chip">{k.count} lượt</span>
-              </div>
-            </article>
-          ))}
-          {(keywordsQuery.data || []).length === 0 && !keywordsQuery.isLoading ? (
-            <DoctorNotice tone="neutral" title="Chưa có từ khóa" description="Hiện tại chưa ghi nhận từ khóa tìm kiếm nào trong khoảng thời gian này." />
-          ) : null}
-        </div>
-      </DoctorPanel>
     </div>
   )
 }

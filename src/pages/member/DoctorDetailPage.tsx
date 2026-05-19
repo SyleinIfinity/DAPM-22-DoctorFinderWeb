@@ -194,6 +194,7 @@ export function DoctorDetailPage() {
   const isFollowed = !!followsQuery.data?.some((followedDoctor) => followedDoctor.maBacSi === maBacSi);
   const isFollowingActionPending = followMutation.isPending || unfollowMutation.isPending;
   const initials = (doctor.hoTenDayDu || "BS").split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase() || "BS";
+  const doctorAvatar = doctor.anhDaiDien || undefined;
   const rating = ratingQuery.data;
   const reviews = reviewQuery.data ?? [];
 

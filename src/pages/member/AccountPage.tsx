@@ -20,6 +20,13 @@ import {
 } from "../doctor/doctorUi";
 import { getApiErrorMessage } from "../../utils/errors";
 
+function normalizeAvatarUrl(value?: string | null) {
+  const normalized = value?.trim();
+  if (!normalized) return null;
+  if (normalized.startsWith("data:")) return null;
+  return normalized;
+}
+
 const STYLES = `
   .account-wrapper {
     --brand-primary: #7c3aed;
@@ -54,15 +61,18 @@ const STYLES = `
     width: 140px;
     height: 140px;
     margin: 0 auto 16px;
-    border-radius: 32px;
+    border-radius: 999px;
     overflow: hidden;
+    background: #f3f4f6;
+    box-shadow: 0 10px 20px rgba(15, 23, 42, 0.08);
   }
 
   .avatar-circle {
     width: 100%;
     height: 100%;
-    border-radius: 32px;
+    border-radius: 999px;
     object-fit: cover;
+    object-position: center center;
     border: 4px solid #f3f4f6;
     background: #f3f4f6;
     display: flex;
@@ -177,7 +187,6 @@ type UserForm = {
   soDienThoai: string;
   email: string;
   cccd: string;
-  anhDaiDien: string;
 };
 
 const USER_FIELDS: Array<{ k: keyof UserForm; label: string }> = [
@@ -202,11 +211,11 @@ export function AccountPage() {
     soDienThoai: "",
     email: "",
     cccd: "",
-    anhDaiDien: "",
   });
   const [snapshot, setSnapshot] = useState<UserForm | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const memberAccountQuery = useQuery({
@@ -248,12 +257,18 @@ export function AccountPage() {
         soDienThoai: d.soDienThoai || "",
         email: d.email || "",
         cccd: d.cccd || "",
-        anhDaiDien: d.anhDaiDien || "",
       };
       setUserForm(next);
       setSnapshot(next);
     }
   }, [memberAccountQuery.data]);
+
+  useEffect(
+    () => () => {
+      if (avatarPreview?.startsWith("blob:")) URL.revokeObjectURL(avatarPreview);
+    },
+    [avatarPreview],
+  );
 
   const updateUserMutation = useMutation({
     mutationFn: async () => {
@@ -269,11 +284,41 @@ export function AccountPage() {
     onError: (err) => alert(getApiErrorMessage(err)),
   });
 
+  const updateAvatarMutation = useMutation({
+    mutationFn: async () => {
+      if (!maNguoiDung) throw new Error("Thiếu maNguoiDung");
+      if (!avatarFile) return null;
+      const form = new FormData();
+      form.append("avatar", avatarFile);
+      return (await api.put(`/api/users/${maNguoiDung}/avatar`, form)).data as AccountDoctorInfo;
+    },
+    onSuccess: async () => {
+      setAvatarPreview(null);
+      setAvatarFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      await qc.invalidateQueries({ queryKey: ["account", maTaiKhoan] });
+      alert("Đã cập nhật ảnh đại diện!");
+    },
+    onError: (err) => alert(getApiErrorMessage(err)),
+  });
+
+  const handleAvatarSelect = (file: File | null) => {
+    setAvatarFile(file);
+    setAvatarPreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return file ? URL.createObjectURL(file) : null;
+    });
+  };
+
   const fullName = useMemo(
     () => `${userForm.hoLot} ${userForm.ten}`.trim() || "Thành viên",
     [userForm.hoLot, userForm.ten],
   );
-  const avatarUrl = avatarPreview || userForm.anhDaiDien?.trim();
+  const currentAvatarUrl =
+    normalizeAvatarUrl(
+      memberAccountQuery.data?.anhDaiDien || doctorProfileQuery.data?.anhDaiDien,
+    ) || null;
+  const avatarUrl = avatarPreview || currentAvatarUrl;
 
   if (isDoctorContext) {
     const profile = doctorProfileQuery.data;
@@ -522,7 +567,7 @@ export function AccountPage() {
               onClick={() => isEditing && fileInputRef.current?.click()}
             >
               {avatarUrl ? (
-                <img src={avatarUrl} className="avatar-circle" alt="avatar" />
+                <DoctorAvatar name={fullName} imageUrl={avatarUrl} size={140} />
               ) : (
                 <div className="avatar-circle">{createInitials(fullName)}</div>
               )}
@@ -546,17 +591,8 @@ export function AccountPage() {
               accept="image/*"
               hidden
               onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) {
-                  const reader = new FileReader();
-                  reader.onload = () => {
-                    const res =
-                      typeof reader.result === "string" ? reader.result : "";
-                    setAvatarPreview(res);
-                    setUserForm((prev) => ({ ...prev, anhDaiDien: res }));
-                  };
-                  reader.readAsDataURL(file);
-                }
+                const file = e.target.files?.[0] ?? null;
+                handleAvatarSelect(file);
               }}
             />
 
@@ -606,7 +642,8 @@ export function AccountPage() {
                     onClick={() => {
                       setIsEditing(false);
                       if (snapshot) setUserForm(snapshot);
-                      setAvatarPreview(null);
+                      handleAvatarSelect(null);
+                      if (fileInputRef.current) fileInputRef.current.value = "";
                     }}
                   >
                     Hủy
@@ -617,9 +654,16 @@ export function AccountPage() {
                   >
                     Lưu hồ sơ
                   </button>
+                  <button
+                    className="icon-btn"
+                    onClick={() => updateAvatarMutation.mutate()}
+                    disabled={!avatarFile || updateAvatarMutation.isPending}
+                  >
+                    {updateAvatarMutation.isPending ? "Đang cập nhật ảnh..." : "Lưu ảnh đại diện"}
+                  </button>
                 </div>
               ) : (
-                <button className="icon-btn" onClick={() => setIsEditing(true)}>
+                <button className="icon-btn" type="button" onClick={() => setIsEditing(true)}>
                   ✎ Chỉnh sửa
                 </button>
               )}

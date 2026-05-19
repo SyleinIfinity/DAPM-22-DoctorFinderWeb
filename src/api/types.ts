@@ -55,6 +55,7 @@ export type AccountDoctorInfo = {
   email: string
   cccd: string
   anhDaiDien: string | null
+  anhDaiDienPublicId: string | null
   coTaiKhoanBacSi: boolean
   maBacSi: number | null
   chuyenKhoa: string | null
@@ -80,6 +81,7 @@ export type DoctorProfile = {
   soDienThoai: string
   email: string
   anhDaiDien: string | null
+  anhDaiDienPublicId: string | null
   chuyenKhoa: string
   trinhDoChuyenMon: string
   loaiHinhBacSi: string
@@ -406,7 +408,9 @@ export type AdminDoctorProfileTrafficReport = {
 export type AdminReportDoctorRank = {
   rank: number
   maBacSi: number
-  hoTenDayTu: string
+  hoTenDayDu: string
+  chuyenKhoa: string
+  trangThaiHoSo: string
   count: number
 }
 
@@ -414,4 +418,10 @@ export type AdminReportKeyword = {
   rank: number
   keyword: string
   count: number
+}
+
+export type DoctorRatingSummary = {
+  maBacSi: number
+  tongDanhGia: number
+  soSaoTrungBinh: number | null
 }
