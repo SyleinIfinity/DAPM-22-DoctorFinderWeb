@@ -42,27 +42,32 @@ export function AppointmentsPage() {
   const [tab, setTab] = useState<TabKey>('pending')
   const [showCreate, setShowCreate] = useState(false)
 
+  // Map tab to API scope for optimized data fetching
+  const getScope = (tabKey: TabKey): string => {
+    switch (tabKey) {
+      case 'pending': return 'pending'
+      case 'waiting': return 'waiting'
+      case 'done': return 'done'
+      case 'review': return 'review'
+      case 'history': return 'history'
+      default: return 'pending'
+    }
+  }
+
   const query = useQuery({
-    queryKey: ['appointments', maNguoiDung],
+    queryKey: ['appointments', maNguoiDung, tab],
     queryFn: async () => {
       if (!maNguoiDung) return [] as AppointmentSummary[]
-      return (await api.get<AppointmentSummary[]>('/api/appointments', { params: { maNguoiDung, scope: 'HISTORY' } })).data
+      const scope = getScope(tab)
+      return (await api.get<AppointmentSummary[]>('/api/appointments', { params: { maNguoiDung, scope } })).data
     },
     enabled: !!maNguoiDung,
   })
 
   const list = useMemo(() => query.data || [], [query.data])
 
-  const filteredList = useMemo(() => {
-    return list.filter((a) => {
-      if (tab === 'pending') return a.trangThaiPhieu === 'CHO_XAC_NHAN'
-      if (tab === 'waiting') return a.trangThaiPhieu === 'DA_XAC_NHAN'
-      if (tab === 'done') return a.trangThaiPhieu === 'DA_KHAM'
-      if (tab === 'review') return a.trangThaiPhieu === 'DA_KHAM' && a.coTheDanhGia
-      if (tab === 'history') return a.trangThaiPhieu !== 'CHO_XAC_NHAN'
-      return true
-    })
-  }, [list, tab])
+  // No local filtering needed - Backend returns only relevant items
+  const filteredList = useMemo(() => list, [list])
 
   const reviewTarget = useMemo(() => {
     if (tab !== 'review') return null
