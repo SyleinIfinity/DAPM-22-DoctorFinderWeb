@@ -72,22 +72,29 @@ export function FollowsPage() {
         {isLoading ? <div className="member-empty-state">Đang tải dữ liệu...</div> : null}
         {!isLoading && filtered.length === 0 ? <div className="member-empty-state">{activeTab === "FOLLOWED" ? "Bạn chưa theo dõi bác sĩ nào." : "Bạn chưa xem hồ sơ bác sĩ nào gần đây."}</div> : null}
         <div className="member-doctor-list">
-          {filtered.map((f: any) => (
-            <article key={f.maBacSi} className="member-doctor-card" onClick={() => navigate(`/app/doctors/${f.maBacSi}`)}>
-              <div className="member-doctor-card__avatar">{(f.hoTenBacSi || f.hoTenDayDu || "BS").slice(0, 2).toUpperCase()}</div>
-              <div className="member-doctor-card__body">
-                <h3>{f.hoTenBacSi || f.hoTenDayDu}</h3>
-                <p>{f.chuyenKhoa} • {f.tenCoSoYTe || ""}</p>
-                <p className="member-doctor-card__muted">{f.diaChiLamViec || "Chưa cập nhật địa chỉ"}</p>
-              </div>
-              <div className="member-doctor-card__cta">
-                <button className="btn btn-ghost" type="button" onClick={(e) => { e.stopPropagation(); activeTab === "FOLLOWED" ? unfollow.mutate(f.maBacSi) : follow.mutate(f.maBacSi); }}>
-                  {activeTab === "FOLLOWED" ? "Bỏ theo dõi" : "Theo dõi"}
-                </button>
-                <button className="btn btn-primary" type="button" onClick={(e) => { e.stopPropagation(); navigate(`/app/doctors/${f.maBacSi}/slots`); }}>Đặt lịch</button>
-              </div>
-            </article>
-          ))}
+          {filtered.map((f: any) => {
+            const name = f.hoTenBacSi || f.hoTenDayDu || "BS";
+            const avatarUrl = f.anhDaiDien ?? f.anhDaiDienBacSi ?? null;
+
+            return (
+              <article key={f.maBacSi} className="member-doctor-card" onClick={() => navigate(`/app/doctors/${f.maBacSi}`)}>
+                <div className="member-doctor-card__avatar">
+                  {avatarUrl ? <img src={avatarUrl} alt={name} /> : <span>{name.slice(0, 2).toUpperCase()}</span>}
+                </div>
+                <div className="member-doctor-card__body">
+                  <h3>{name}</h3>
+                  <p>{f.chuyenKhoa} • {f.tenCoSoYTe || ""}</p>
+                  <p className="member-doctor-card__muted">{f.diaChiLamViec || "Chưa cập nhật địa chỉ"}</p>
+                </div>
+                <div className="member-doctor-card__cta">
+                  <button className="btn btn-ghost" type="button" onClick={(e) => { e.stopPropagation(); activeTab === "FOLLOWED" ? unfollow.mutate(f.maBacSi) : follow.mutate(f.maBacSi); }}>
+                    {activeTab === "FOLLOWED" ? "Bỏ theo dõi" : "Theo dõi"}
+                  </button>
+                  <button className="btn btn-primary" type="button" onClick={(e) => { e.stopPropagation(); navigate(`/app/doctors/${f.maBacSi}/slots`); }}>Đặt lịch</button>
+                </div>
+              </article>
+            );
+          })}
         </div>
       </section>
     </div>
