@@ -4,7 +4,7 @@ export function PageHeader({
   title,
   right,
 }: {
-  title: string
+  title: React.ReactNode
   right?: React.ReactNode
 }) {
   return (

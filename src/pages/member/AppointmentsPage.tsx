@@ -7,7 +7,7 @@ import { PageHeader } from '../../components/PageHeader'
 import { api } from '../../api/http'
 import { getApiErrorMessage } from '../../utils/errors'
 
-type Scope = 'upcoming' | 'history'
+type TabKey = 'pending' | 'waiting' | 'done' | 'review' | 'history'
 
 function normalizeTime(value: string | null): string {
   if (!value) return '--:--'
@@ -16,11 +16,22 @@ function normalizeTime(value: string | null): string {
 
 function getStatusStyles(status: string | null) {
   switch (status) {
-    case 'CHO_DUYET': return { color: '#FAAD14', bg: '#FFFBE6', border: '#FFE58F', label: 'Chờ duyệt' }
-    case 'DA_XAC_NHAN': return { color: '#13C2C2', bg: '#E6FFFB', border: '#87E8DE', label: 'Sắp tới' }
-    case 'THANH_CONG': return { color: '#52C41A', bg: '#F6FFED', border: '#B7EB8F', label: 'Hoàn thành' }
+    case 'CHO_XAC_NHAN': return { color: '#FAAD14', bg: '#FFFBE6', border: '#FFE58F', label: 'Chờ xác nhận' }
+    case 'DA_XAC_NHAN': return { color: '#13C2C2', bg: '#E6FFFB', border: '#87E8DE', label: 'Chờ khám' }
+    case 'DA_KHAM': return { color: '#52C41A', bg: '#F6FFED', border: '#B7EB8F', label: 'Đã khám' }
+    case 'DA_HUY': return { color: '#8C8C8C', bg: '#F5F5F5', border: '#D9D9D9', label: 'Đã hủy' }
     case 'TU_CHOI': return { color: '#FF4D4F', bg: '#FFF1F0', border: '#FFA39E', label: 'Đã từ chối' }
     default: return { color: '#8C8C8C', bg: '#F5F5F5', border: '#D9D9D9', label: 'Không xác định' }
+  }
+}
+
+function getTabLabel(tab: TabKey) {
+  switch (tab) {
+    case 'pending': return 'Chờ xác nhận'
+    case 'waiting': return 'Chờ khám'
+    case 'done': return 'Đã khám'
+    case 'review': return 'Đánh giá'
+    case 'history': return 'Lịch sử'
   }
 }
 
@@ -28,20 +39,40 @@ export function AppointmentsPage() {
   const navigate = useNavigate()
   const { session } = useAuth()
   const maNguoiDung = session?.maNguoiDung ?? null
-  const [scope, setScope] = useState<Scope>('upcoming')
+  const [tab, setTab] = useState<TabKey>('pending')
   const [showCreate, setShowCreate] = useState(false)
 
+  // Map tab to API scope for optimized data fetching
+  const getScope = (tabKey: TabKey): string => {
+    switch (tabKey) {
+      case 'pending': return 'pending'
+      case 'waiting': return 'waiting'
+      case 'done': return 'done'
+      case 'review': return 'review'
+      case 'history': return 'history'
+      default: return 'pending'
+    }
+  }
+
   const query = useQuery({
-    queryKey: ['appointments', maNguoiDung, scope],
+    queryKey: ['appointments', maNguoiDung, tab],
     queryFn: async () => {
       if (!maNguoiDung) return [] as AppointmentSummary[]
-      const actualScope = scope === 'upcoming' ? 'UPCOMING' : 'HISTORY'
-      return (await api.get<AppointmentSummary[]>('/api/appointments', { params: { maNguoiDung, scope: actualScope } })).data
+      const scope = getScope(tab)
+      return (await api.get<AppointmentSummary[]>('/api/appointments', { params: { maNguoiDung, scope } })).data
     },
     enabled: !!maNguoiDung,
   })
 
   const list = useMemo(() => query.data || [], [query.data])
+
+  // No local filtering needed - Backend returns only relevant items
+  const filteredList = useMemo(() => list, [list])
+
+  const reviewTarget = useMemo(() => {
+    if (tab !== 'review') return null
+    return filteredList.find((a) => a.coTheDanhGia) ?? null
+  }, [filteredList, tab])
 
   return (
     <div className="member-page-shell">
@@ -52,20 +83,54 @@ export function AppointmentsPage() {
 
       <div className="member-panel">
         <div className="member-tabs">
-          <button onClick={() => setScope('upcoming')} className={scope === 'upcoming' ? 'member-tab member-tab--active' : 'member-tab'}>Sắp tới</button>
-          <button onClick={() => setScope('history')} className={scope === 'history' ? 'member-tab member-tab--active' : 'member-tab'}>Lịch sử</button>
+          {(Object.keys({ pending: true, waiting: true, done: true, review: true, history: true }) as TabKey[]).map((key) => (
+            <button
+              key={key}
+              onClick={() => setTab(key)}
+              className={tab === key ? 'member-tab member-tab--active' : 'member-tab'}
+              type="button"
+            >
+              {getTabLabel(key)}
+            </button>
+          ))}
         </div>
 
         {query.isError ? <div className="member-empty-state member-empty-state--error">{getApiErrorMessage(query.error)}</div> : null}
         {query.isLoading ? <div className="member-empty-state">Đang tải lịch hẹn...</div> : null}
-        {!query.isLoading && list.length === 0 ? <div className="member-empty-state">Chưa có lịch hẹn nào.</div> : null}
+        {!query.isLoading && filteredList.length === 0 ? <div className="member-empty-state">Chưa có lịch hẹn nào trong tab này.</div> : null}
+
+        {tab === 'review' && reviewTarget ? (
+          <div className="member-review-banner" style={{ marginBottom: 16, padding: 16, borderRadius: 16, background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+              <div>
+                <div style={{ fontWeight: 700, marginBottom: 4 }}>Bác sĩ {reviewTarget.hoTenBacSi}</div>
+                <div style={{ color: '#64748b' }}>{reviewTarget.chuyenKhoa} • {reviewTarget.tenCoSoYTe}</div>
+              </div>
+              <button
+                type="button"
+                className="member-tab member-tab--active"
+                onClick={() => navigate(`/app/doctors/${reviewTarget.maBacSi}`)}
+                style={{ cursor: 'pointer' }}
+              >
+                Viết đánh giá
+              </button>
+            </div>
+          </div>
+        ) : null}
 
         <div className="member-appointment-list">
-          {list.map((a) => {
-            const status = getStatusStyles(a.trangThaiPhieu);
-            const dateParts = (a.ngayCuThe || '----/--/--').split('-'); 
+          {filteredList.map((a) => {
+            const status = getStatusStyles(a.trangThaiPhieu)
+            const dateParts = (a.ngayCuThe || '----/--/--').split('-')
+            const canGoToReview = tab === 'review' && a.coTheDanhGia
             return (
-              <article key={a.maPhieuDatLich} className="member-appointment-card" onClick={() => navigate(`/app/appointments/${a.maPhieuDatLich}`)}>
+              <article
+                key={a.maPhieuDatLich}
+                className="member-appointment-card"
+                onClick={() => navigate(`/app/appointments/${a.maPhieuDatLich}`)}
+                role="button"
+                tabIndex={0}
+              >
                 <div className="member-date-box">
                   <span>THG {dateParts[1]}</span>
                   <strong>{dateParts[2]}</strong>
@@ -76,10 +141,25 @@ export function AppointmentsPage() {
                 </div>
                 <div className="member-appointment-card__footer">
                   <span className="member-status-pill" style={{ color: status.color, backgroundColor: status.bg, borderColor: status.border }}>{status.label}</span>
-                  <span className="member-link">Xem chi tiết ›</span>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    {canGoToReview ? (
+                      <button
+                        type="button"
+                        className="member-link"
+                        style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer' }}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          navigate(`/app/doctors/${a.maBacSi}`)
+                        }}
+                      >
+                        Đi tới đánh giá ›
+                      </button>
+                    ) : null}
+                    <span className="member-link">Xem chi tiết ›</span>
+                  </div>
                 </div>
               </article>
-            );
+            )
           })}
         </div>
       </div>

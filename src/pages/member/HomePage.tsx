@@ -1,23 +1,32 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../auth/AuthContext';
+import { loadRecentDoctors } from '../../utils/recentDoctors';
+import type { RecentDoctor } from '../../utils/recentDoctors';
 
 export default function HomePage() {
   const navigate = useNavigate();
+  const { session } = useAuth();
   const [searchValue, setSearchValue] = useState('');
   const [image, setImage] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [recentDoctors, setRecentDoctors] = useState<RecentDoctor[]>([]);
+
+  // Load recent doctors from localStorage
+  useEffect(() => {
+    const doctors = loadRecentDoctors();
+    // Tăng slice lên nếu bạn muốn hiển thị nhiều thẻ nằm ngang hơn để cuộn
+    setRecentDoctors(doctors.slice(0, 5)); 
+  }, []);
+
+  // Get user display name
+  const userName = session?.tenDangNhap || 'bạn';
 
   const specialties = [
     { id: 1, name: 'Tim mạch', icon: '🩺', color: '#FFF0F3', iconColor: '#E91E63' },
     { id: 2, name: 'Thần kinh', icon: '🧠', color: '#FFF9E5', iconColor: '#FFA000' },
     { id: 3, name: 'Nha khoa', icon: '🦷', color: '#E5FBF9', iconColor: '#009688' },
     { id: 4, name: 'Nhi khoa', icon: '🍼', color: '#E5F5FB', iconColor: '#03A9F4' },
-  ];
-
-  const doctors = [
-    { id: 1, name: 'BS. Lê Bình', specialty: 'Nhi khoa' },
-    { id: 2, name: 'BS. Lê Bình', specialty: 'Nhi khoa' },
-    { id: 3, name: 'BS. Lê Bình', specialty: 'Nhi khoa' },
   ];
 
   useEffect(() => {
@@ -32,7 +41,7 @@ export default function HomePage() {
     <div className="member-page-shell member-home-shell">
       <div className="member-hero">
         <div>
-          <div className="member-hero__title">Xin chào, Huy</div>
+          <div className="member-hero__title">Xin chào, {userName}</div>
           <div className="member-hero__subtitle">Chăm sóc sức khoẻ mỗi ngày</div>
         </div>
         <button type="button" className="member-notification-btn">🔔</button>
@@ -109,7 +118,7 @@ export default function HomePage() {
         </div>
         <div className="member-specialty-grid">
           {specialties.map((s) => (
-            <button key={s.id} className="member-specialty-card" type="button" onClick={() => navigate('/app/search', { state: { specialty: s.name } })}>
+            <button key={s.id} className="member-specialty-card" type="button" onClick={() => navigate('/app/search', { state: { keyword: s.name } })}>
               <div style={{ background: s.color, color: s.iconColor }} className="member-specialty-card__icon">{s.icon}</div>
               <span>{s.name}</span>
             </button>
@@ -117,6 +126,7 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* CẬP NHẬT PHẦN BÁC SĨ TÌM KIẾM GẦN ĐÂY */}
       <section className="member-panel">
         <div className="member-panel__header">
           <div>
@@ -124,15 +134,94 @@ export default function HomePage() {
             <div className="member-panel__subtitle">Các hồ sơ bạn đã xem</div>
           </div>
         </div>
-        <div className="member-doctor-preview-grid">
-          {doctors.map((d) => (
-            <button key={d.id} className="member-doctor-preview-card" type="button" onClick={() => navigate('/app/search')}>
-              <div className="member-doctor-preview-card__photo">{d.name.slice(0, 2).toUpperCase()}</div>
-              <strong>{d.name}</strong>
-              <span>{d.specialty}</span>
-            </button>
-          ))}
-        </div>
+        
+        {recentDoctors.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '32px 20px', color: '#9CA3AF', fontSize: '14px' }}>
+            Bạn chưa xem hồ sơ bác sĩ nào gần đây
+          </div>
+        ) : (
+          <div style={{ display: 'flex', gap: '16px', overflowX: 'auto', paddingBottom: '8px' }}>
+            {recentDoctors.map((d: any) => {
+              const name = d.hoTenDayDu || d.hoTenBacSi || "Bác sĩ";
+              const initials = name.replace("BS. ", "").charAt(0).toUpperCase();
+              
+              // Lấy ảnh (ưu tiên các trường hợp tên biến từ API nếu có trong LocalStorage)
+              const avatarUrl = d.anhDaiDien || d.anhDaiDienBacSi || d.bacSi?.anhDaiDien || null;
+
+              return (
+                <button 
+                  key={d.maBacSi} 
+                  type="button" 
+                  onClick={() => navigate(`/app/doctors/${d.maBacSi}`)}
+                  style={{ 
+                    cursor: 'pointer',
+                    backgroundColor: '#ffffff',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '16px',
+                    padding: '16px',
+                    minWidth: '160px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '12px',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
+                    transition: 'all 0.2s',
+                    flexShrink: 0 
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = '#2dd4bf';
+                    e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(20, 184, 166, 0.1)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = '#e5e7eb';
+                    e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.02)';
+                  }}
+                >
+                  {/* Avatar vuông bo góc */}
+                  <div 
+                    style={{
+                      width: '64px',
+                      height: '64px',
+                      borderRadius: '16px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: '#f0fdfa', // Teal nhạt
+                      color: '#0f766e', // Teal đậm
+                      fontWeight: 'bold',
+                      fontSize: '24px',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    {avatarUrl ? (
+                      <img
+                        src={avatarUrl}
+                        alt={name}
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'cover',
+                        }}
+                      />
+                    ) : (
+                      initials
+                    )}
+                  </div>
+                  
+                  {/* Thông tin */}
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', textAlign: 'center' }}>
+                    <strong style={{ fontSize: '14px', color: '#111827', margin: 0, display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                      {name}
+                    </strong>
+                    <span style={{ fontSize: '12px', color: '#6b7280' }}>
+                      {d.chuyenKhoa || "Chuyên khoa"}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </section>
     </div>
   );

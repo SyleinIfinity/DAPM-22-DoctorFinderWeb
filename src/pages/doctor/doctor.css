@@ -729,6 +729,12 @@
   gap: 10px;
 }
 
+.doctor-tab-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 /* ═══════════════════════════════════════════════════════════
    PROFILE STRIP
 ═══════════════════════════════════════════════════════════ */
@@ -819,6 +825,11 @@
   gap: 16px;
 }
 
+.doctor-metrics-grid--compact {
+  grid-template-columns: repeat(4, minmax(170px, 220px));
+  justify-content: flex-start;
+}
+
 .doctor-action-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -829,10 +840,252 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 22px;
 }
+
+.doctor-request-workspace {
+  display: grid;
+  grid-template-columns: minmax(320px, 0.78fr) minmax(420px, 1.22fr);
+  gap: 18px;
+  align-items: stretch;
+}
+
+.doctor-request-list-panel,
+.doctor-request-detail-panel {
+  min-height: 0;
+  height: clamp(760px, calc(100svh - 210px), 980px);
+  display: flex;
+  flex-direction: column;
+}
+
+.doctor-request-list-body,
+.doctor-request-detail-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.doctor-request-list-body {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.doctor-request-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.doctor-request-search,
+.doctor-request-select {
+  min-height: 42px;
+}
+
+.doctor-request-search {
+  padding-right: 16px;
+}
+
+.doctor-request-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.doctor-request-item {
+  width: 100%;
+  padding: 18px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-lg);
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: var(--shadow-xs);
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+  transition:
+    transform 220ms var(--ease-spring),
+    box-shadow 220ms ease,
+    border-color 220ms ease,
+    background 220ms ease;
+}
+
+.doctor-request-item:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: rgba(14, 158, 138, 0.24);
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.doctor-request-item.is-selected {
+  border-color: rgba(14, 158, 138, 0.42);
+  background:
+    linear-gradient(
+      145deg,
+      rgba(14, 158, 138, 0.12),
+      rgba(26, 111, 160, 0.06)
+    ),
+    rgba(255, 255, 255, 0.96);
+  box-shadow:
+    var(--shadow-md),
+    0 0 0 1px rgba(14, 158, 138, 0.16);
+}
+
+.doctor-request-item__header,
+.doctor-request-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.doctor-profile-strip--compact {
+  align-items: center;
+  gap: 14px;
+}
+
+.doctor-profile-strip--compact .doctor-avatar {
+  width: 54px;
+  height: 54px;
+  border-radius: 16px;
+  font-size: 16px;
+}
+
+.doctor-profile-strip--compact .doctor-profile-strip__name {
+  font-size: 15px;
+}
+
+.doctor-profile-strip--compact .doctor-profile-strip__meta {
+  font-size: 12.5px;
+}
+
+.doctor-request-item__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-top: 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--c-ink-3);
+}
+
+.doctor-request-item__preview {
+  margin: 12px 0 0;
+  color: var(--c-ink-2);
+  font-size: 13px;
+  line-height: 1.68;
+  font-weight: 300;
+}
+
+.doctor-request-detail-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.doctor-request-hero {
+  padding: 20px;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--c-border);
+  background:
+    linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.88),
+      rgba(240, 249, 247, 0.72)
+    );
+}
+
+.doctor-request-hero__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.doctor-request-action-box {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+  border-radius: var(--r-lg);
+  border: 1px solid rgba(14, 158, 138, 0.18);
+  background: rgba(14, 158, 138, 0.05);
+}
+
+.doctor-request-action-box__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--c-ink);
+}
+
+.doctor-request-action-box__description {
+  margin: 8px 0 0;
+  color: var(--c-ink-2);
+  font-size: 13.5px;
+  line-height: 1.72;
+  font-weight: 300;
+}
+
 .doctor-schedule-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
   gap: 18px;
+}
+
+.doctor-schedule-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(380px, 1fr);
+  gap: 18px;
+  align-items: stretch;
+}
+
+.doctor-schedule-left {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 18px;
+  height: clamp(760px, calc(100svh - 190px), 980px);
+}
+
+.doctor-schedule-calendar-panel,
+.doctor-schedule-detail-panel,
+.doctor-schedule-editor-panel {
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.doctor-schedule-editor-panel {
+  height: clamp(760px, calc(100svh - 190px), 980px);
+}
+
+.doctor-schedule-calendar-body,
+.doctor-schedule-detail-body,
+.doctor-schedule-editor-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.doctor-schedule-editor-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.doctor-schedule-editor-body .doctor-note-card {
+  padding: 11px 13px;
+}
+
+.doctor-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.doctor-editor-actions .doctor-button {
+  flex: 1 1 180px;
 }
 
 .doctor-calendar-toolbar {
@@ -1872,6 +2125,15 @@
   background: rgba(255, 255, 255, 0.75);
 }
 
+.doctor-note-card--danger {
+  border-left-color: rgba(184, 76, 76, 0.45);
+  background: rgba(184, 76, 76, 0.06);
+}
+
+.doctor-note-card--danger:hover {
+  border-left-color: var(--c-rose);
+}
+
 .doctor-note {
   margin: 0;
   color: var(--c-ink-2);
@@ -1897,6 +2159,34 @@
   .doctor-metrics-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  .doctor-request-workspace,
+  .doctor-schedule-layout {
+    grid-template-columns: 1fr;
+  }
+  .doctor-request-list-panel,
+  .doctor-request-detail-panel {
+    height: auto;
+  }
+  .doctor-request-list-body,
+  .doctor-request-detail-body {
+    max-height: none;
+    overflow: visible;
+    padding-right: 0;
+  }
+  .doctor-schedule-left {
+    height: auto;
+    grid-template-rows: auto auto;
+  }
+  .doctor-schedule-editor-panel {
+    height: auto;
+  }
+  .doctor-schedule-calendar-body,
+  .doctor-schedule-detail-body,
+  .doctor-schedule-editor-body {
+    max-height: none;
+    overflow: visible;
+    padding-right: 0;
+  }
   .doctor-schedule-grid,
   .doctor-hero,
   .doctor-request-grid {
@@ -1911,6 +2201,8 @@
 
   .doctor-page-heading,
   .doctor-panel__header,
+  .doctor-request-item__header,
+  .doctor-request-hero,
   .doctor-list-card__header,
   .doctor-list-card__footer,
   .doctor-inline-between,
@@ -1939,6 +2231,14 @@
   .doctor-hero {
     padding: 20px;
     border-radius: var(--r-xl);
+  }
+
+  .doctor-request-item {
+    padding: 16px;
+  }
+
+  .doctor-request-hero__badges {
+    justify-content: flex-start;
   }
 
   .doctor-stat-card {

@@ -188,32 +188,33 @@ export function DoctorProfileUpdatePage() {
       const hadExistingDoctor = !!rawData?.maBacSi;
       let maBacSi = rawData?.maBacSi ?? null;
 
-      const upgradeForm = new FormData();
-      upgradeForm.append("maTaiKhoan", String(maTaiKhoan));
-      upgradeForm.append(
-        "thongTinBacSi",
-        new Blob([JSON.stringify(doctorPayload)], { type: "application/json" }),
-      );
+      if (hadExistingDoctor && maBacSi) {
+        await api.put(`/api/doctors/${maBacSi}`, doctorPayload);
+        messages.push("Đã cập nhật thông tin hồ sơ bác sĩ.");
+      } else {
+        const upgradeForm = new FormData();
+        upgradeForm.append("maTaiKhoan", String(maTaiKhoan));
+        upgradeForm.append(
+          "thongTinBacSi",
+          new Blob([JSON.stringify(doctorPayload)], { type: "application/json" }),
+        );
 
-      if (!maBacSi) {
         for (const doc of validDocs) {
           const fallbackTitle = doc.file?.name ?? "Tai lieu minh chung";
           upgradeForm.append("tieuDeTaiLieu", doc.title.trim() || fallbackTitle);
           upgradeForm.append("files", doc.file as File);
         }
-      }
 
-      const upgradeResponse = await api.post<UpgradeToDoctorResponse>(
-        "/api/auth/upgrade-to-doctor",
-        upgradeForm,
-        { headers: { "Content-Type": "multipart/form-data" } },
-      );
-      messages.push(upgradeResponse.data.message);
-      if (!maBacSi) {
+        const upgradeResponse = await api.post<UpgradeToDoctorResponse>(
+          "/api/auth/upgrade-to-doctor",
+          upgradeForm,
+          { headers: { "Content-Type": "multipart/form-data" } },
+        );
+        messages.push(upgradeResponse.data.message);
         maBacSi = upgradeResponse.data.maBacSi ?? null;
       }
 
-      if (hadExistingDoctor && maBacSi && validDocs.length > 0) {
+      if (maBacSi && validDocs.length > 0) {
         for (const doc of validDocs) {
           const form = new FormData();
           const fallbackTitle = doc.file?.name ?? "Tai lieu minh chung";
@@ -226,7 +227,7 @@ export function DoctorProfileUpdatePage() {
         messages.push(`Đã tải ${validDocs.length} tài liệu minh chứng.`);
       }
 
-      return { upgraded: upgradeResponse.data.upgraded, message: messages.join(" ") };
+      return { upgraded: !hadExistingDoctor, message: messages.join(" ") };
     },
     onSuccess: async (result) => {
       setNotice({

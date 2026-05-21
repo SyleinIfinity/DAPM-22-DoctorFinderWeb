@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../api/http'
-import type { AppointmentRequest } from '../../api/types'
+import type { AppointmentDetail, AppointmentRequest } from '../../api/types'
 import { useAuth } from '../../auth/AuthContext'
 import { getApiErrorMessage } from '../../utils/errors'
 import {
@@ -12,6 +12,7 @@ import {
   DoctorPanel,
   DoctorStatCard,
   DoctorStatusBadge,
+  formatLongDate,
   formatShortDate,
   formatTimeRange,
   getAppointmentStatusMeta,
@@ -23,21 +24,76 @@ type NoticeState = {
   description: string
 } | null
 
-type RequestTab = 'all' | 'pending' | 'approved' | 'rejected'
+type RequestTab = 'all' | 'pending' | 'confirmed' | 'completed' | 'history' | 'rejected'
 
 function isRejectedStatus(status: string) {
   return status === 'TU_CHOI' || status === 'DA_TU_CHOI' || status === 'DA_HUY'
 }
 
-function isApprovedStatus(status: string) {
-  return status === 'DA_DUYET' || status === 'DA_XAC_NHAN'
+function isCompletedStatus(status: string) {
+  return status === 'DA_KHAM' || status === 'HOAN_THANH'
+}
+
+function isConfirmedStatus(status: string) {
+  return status === 'DA_XAC_NHAN'
+}
+
+function isPendingStatus(status: string) {
+  return status === 'CHO_XAC_NHAN'
+}
+
+function isHistoryStatus(status: string) {
+  return status === 'DA_XAC_NHAN' || isCompletedStatus(status) || isRejectedStatus(status)
+}
+
+function canMarkVisited(status: string) {
+  return status === 'DA_XAC_NHAN'
 }
 
 const TAB_LABELS: Record<RequestTab, string> = {
   all: 'Tất cả',
   pending: 'Chờ xác nhận',
-  approved: 'Đã đồng ý',
+  confirmed: 'Đã xác nhận - chờ hẹn',
+  completed: 'Đã khám',
+  history: 'Lịch sử',
   rejected: 'Đã từ chối',
+}
+
+function getDetailActionState(detail: AppointmentDetail | AppointmentRequest | null) {
+  if (!detail) return null
+
+  if (detail.trangThaiPhieu === 'CHO_XAC_NHAN') {
+    return {
+      title: 'Phiếu hẹn đang chờ bác sĩ phản hồi',
+      description: 'Bạn có thể duyệt ngay nếu lịch phù hợp hoặc từ chối kèm lý do rõ ràng cho bệnh nhân.',
+    }
+  }
+
+  if (detail.trangThaiPhieu === 'DA_XAC_NHAN') {
+    return {
+      title: 'Đã xác nhận - chờ hẹn',
+      description: 'Phiếu đã được bác sĩ duyệt. Khi bệnh nhân đã đến khám, bấm nút xác nhận đã khám.',
+    }
+  }
+
+  if (isCompletedStatus(detail.trangThaiPhieu)) {
+    return {
+      title: 'Đã khám',
+      description: 'Phiếu đã được xác nhận là đã gặp mặt để khám xong.',
+    }
+  }
+
+  if (isRejectedStatus(detail.trangThaiPhieu)) {
+    return {
+      title: 'Lịch sử',
+      description: 'Phiếu này đã được bác sĩ xử lý trước đó và chỉ còn xem lịch sử thao tác.',
+    }
+  }
+
+  return {
+    title: 'Phiếu hẹn đã đóng',
+    description: 'Phiếu này đã được xử lý và hiện chỉ còn chế độ xem thông tin chi tiết.',
+  }
 }
 
 export function DoctorRequestsPage() {
@@ -47,6 +103,8 @@ export function DoctorRequestsPage() {
 
   const [notice, setNotice] = useState<NoticeState>(null)
   const [activeTab, setActiveTab] = useState<RequestTab>('all')
+  const [searchTerm, setSearchTerm] = useState('')
+  const [selectedRequestId, setSelectedRequestId] = useState<number | null>(null)
   const [rejectingId, setRejectingId] = useState<number | null>(null)
   const [lyDoTuChoi, setLyDoTuChoi] = useState('')
 
@@ -58,24 +116,77 @@ export function DoctorRequestsPage() {
 
   const requests = query.data ?? []
 
-  const filteredRequests = useMemo(() => {
-    if (activeTab === 'pending') return requests.filter((request) => request.trangThaiPhieu === 'CHO_XAC_NHAN')
-    if (activeTab === 'approved') return requests.filter((request) => isApprovedStatus(request.trangThaiPhieu))
+  const tabFilteredRequests = useMemo(() => {
+    if (activeTab === 'pending') return requests.filter((request) => isPendingStatus(request.trangThaiPhieu))
+    if (activeTab === 'confirmed') return requests.filter((request) => isConfirmedStatus(request.trangThaiPhieu))
+    if (activeTab === 'completed') return requests.filter((request) => isCompletedStatus(request.trangThaiPhieu))
+    if (activeTab === 'history') return requests.filter((request) => isHistoryStatus(request.trangThaiPhieu))
     if (activeTab === 'rejected') return requests.filter((request) => isRejectedStatus(request.trangThaiPhieu))
     return requests
   }, [activeTab, requests])
 
-  const pendingCount = useMemo(() => requests.filter((request) => request.trangThaiPhieu === 'CHO_XAC_NHAN').length, [requests])
-  const approvedCount = useMemo(() => requests.filter((request) => isApprovedStatus(request.trangThaiPhieu)).length, [requests])
+  const filteredRequests = useMemo(() => {
+    const keyword = searchTerm.trim().toLowerCase()
+    if (!keyword) return tabFilteredRequests
+
+    return tabFilteredRequests.filter((request) => {
+      const searchTarget = [
+        request.maPhieuDatLich,
+        request.hoTenBenhNhan,
+        request.soDienThoaiBenhNhan,
+        request.emailBenhNhan,
+        request.loaiPhieu,
+        request.trieuChungGhiChu,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+
+      return searchTarget.includes(keyword)
+    })
+  }, [searchTerm, tabFilteredRequests])
+
+  useEffect(() => {
+    if (filteredRequests.length === 0) {
+      setSelectedRequestId(null)
+      setRejectingId(null)
+      setLyDoTuChoi('')
+      return
+    }
+
+    if (!selectedRequestId || !filteredRequests.some((request) => request.maPhieuDatLich === selectedRequestId)) {
+      setSelectedRequestId(filteredRequests[0].maPhieuDatLich)
+      setRejectingId(null)
+      setLyDoTuChoi('')
+    }
+  }, [filteredRequests, selectedRequestId])
+
+  const selectedRequest =
+    filteredRequests.find((request) => request.maPhieuDatLich === selectedRequestId) ??
+    requests.find((request) => request.maPhieuDatLich === selectedRequestId) ??
+    null
+
+  const detailQuery = useQuery({
+    queryKey: ['appointment-detail', selectedRequestId],
+    queryFn: async () => (await api.get<AppointmentDetail>(`/api/appointments/${selectedRequestId}`)).data,
+    enabled: typeof selectedRequestId === 'number' && selectedRequestId > 0,
+  })
+
+  const pendingCount = useMemo(() => requests.filter((request) => isPendingStatus(request.trangThaiPhieu)).length, [requests])
+  const confirmedCount = useMemo(() => requests.filter((request) => isConfirmedStatus(request.trangThaiPhieu)).length, [requests])
+  const completedCount = useMemo(() => requests.filter((request) => isCompletedStatus(request.trangThaiPhieu)).length, [requests])
   const rejectedCount = useMemo(() => requests.filter((request) => isRejectedStatus(request.trangThaiPhieu)).length, [requests])
 
   const approve = useMutation({
     mutationFn: async (maPhieuDatLich: number) => {
       await api.post(`/api/appointments/${maPhieuDatLich}/approve`)
     },
-    onSuccess: async () => {
+    onSuccess: async (_, maPhieuDatLich) => {
       setNotice({ tone: 'success', title: 'Đã duyệt lịch hẹn', description: 'Yêu cầu đặt lịch đã được xác nhận thành công.' })
-      await qc.invalidateQueries({ queryKey: ['appointment-requests', maBacSi] })
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ['appointment-requests', maBacSi] }),
+        qc.invalidateQueries({ queryKey: ['appointment-detail', maPhieuDatLich] }),
+      ])
     },
     onError: (err) =>
       setNotice({ tone: 'danger', title: 'Không thể duyệt lịch hẹn', description: getApiErrorMessage(err) }),
@@ -85,22 +196,56 @@ export function DoctorRequestsPage() {
     mutationFn: async ({ maPhieuDatLich, reason }: { maPhieuDatLich: number; reason: string }) => {
       await api.post(`/api/appointments/${maPhieuDatLich}/reject`, { lyDoTuChoi: reason })
     },
-    onSuccess: async () => {
+    onSuccess: async (_, { maPhieuDatLich }) => {
       setNotice({ tone: 'success', title: 'Đã từ chối lịch hẹn', description: 'Lý do từ chối đã được gửi kèm theo phiếu đặt lịch.' })
       setRejectingId(null)
       setLyDoTuChoi('')
-      await qc.invalidateQueries({ queryKey: ['appointment-requests', maBacSi] })
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ['appointment-requests', maBacSi] }),
+        qc.invalidateQueries({ queryKey: ['appointment-detail', maPhieuDatLich] }),
+      ])
     },
     onError: (err) =>
       setNotice({ tone: 'danger', title: 'Không thể từ chối lịch hẹn', description: getApiErrorMessage(err) }),
   })
 
+  const completeVisit = useMutation({
+    mutationFn: async (maPhieuDatLich: number) => {
+      await api.post(`/api/appointments/${maPhieuDatLich}/complete`)
+    },
+    onSuccess: async (__, maPhieuDatLich) => {
+      setNotice({
+        tone: 'success',
+        title: 'Đã xác nhận hoàn tất buổi khám',
+        description: 'Phiếu hẹn đã được cập nhật sang trạng thái đã khám.',
+      })
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ['appointment-requests', maBacSi] }),
+        qc.invalidateQueries({ queryKey: ['appointment-detail', maPhieuDatLich] }),
+      ])
+    },
+    onError: (err) =>
+      setNotice({
+        tone: 'danger',
+        title: 'Không thể xác nhận đã khám',
+        description: getApiErrorMessage(err),
+      }),
+  })
+
+  const selectedDetail = detailQuery.data ?? null
+  const currentStatus = selectedDetail?.trangThaiPhieu ?? selectedRequest?.trangThaiPhieu ?? ''
+  const selectedStatus = getAppointmentStatusMeta(currentStatus)
+  const actionState = getDetailActionState(selectedDetail ?? selectedRequest)
+  const isRejecting = rejectingId === selectedRequestId
+  const showCompleteButton = currentStatus === 'DA_XAC_NHAN'
+  const showApproveButton = currentStatus === 'CHO_XAC_NHAN'
+
   return (
     <div className="doctor-page">
       <DoctorPageHeading
         eyebrow="Appointment queue"
-        title="Yêu cầu đặt lịch"
-        description="Xem, sàng lọc và phản hồi yêu cầu đặt khám trong một giao diện tập trung, rõ trạng thái và thuận tiện cho thao tác nhanh."
+        title="Lịch hẹn bệnh nhân"
+        description="Danh sách bên trái dùng để chọn nhanh từng phiếu hẹn, còn phần bên phải tập trung toàn bộ chi tiết và thao tác xử lý."
       />
 
       {!maBacSi ? (
@@ -113,166 +258,295 @@ export function DoctorRequestsPage() {
 
       {notice ? <DoctorNotice tone={notice.tone} title={notice.title} description={notice.description} /> : null}
 
-      <section className="doctor-metrics-grid">
-        <DoctorStatCard label="Tổng yêu cầu" value={String(requests.length)} hint="Số lượng phiếu đặt lịch đang được nạp trong danh sách hiện tại." />
-        <DoctorStatCard label="Chờ xác nhận" value={String(pendingCount)} hint="Những phiếu này nên được xử lý sớm để tránh chậm phản hồi cho bệnh nhân." />
-        <DoctorStatCard label="Đã đồng ý" value={String(approvedCount)} hint="Các lịch hẹn đã được xác nhận và có thể theo dõi riêng." />
-        <DoctorStatCard label="Đã từ chối" value={String(rejectedCount)} hint="Nhóm phiếu này được tách riêng để dễ tra cứu lý do xử lý." />
+      <section className="doctor-metrics-grid doctor-metrics-grid--compact">
+        <DoctorStatCard label="Tổng yêu cầu" value={String(requests.length)} hint="Toàn bộ phiếu hẹn đang có trong danh sách hiện tại." />
+        <DoctorStatCard label="Chờ xác nhận" value={String(pendingCount)} hint="Phiếu chưa được bác sĩ duyệt." />
+        <DoctorStatCard label="Đã xác nhận - chờ hẹn" value={String(confirmedCount)} hint="Phiếu đã được duyệt và đang chờ gặp mặt để khám." />
+        <DoctorStatCard label="Đã khám" value={String(completedCount)} hint="Phiếu đã được bác sĩ xác nhận là đã khám xong." />
       </section>
 
-      <DoctorPanel
-        title="Danh sách yêu cầu"
-        description="Mỗi phiếu hiển thị thời gian hẹn, thông tin bệnh nhân và ghi chú triệu chứng nếu có."
-        aside={<span className="doctor-count-bubble">{filteredRequests.length}</span>}
-      >
-        <div className="doctor-tab-row" style={{ marginBottom: 16 }}>
-          {(Object.keys(TAB_LABELS) as RequestTab[]).map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              className={activeTab === tab ? 'doctor-button doctor-button--primary' : 'doctor-button doctor-button--secondary'}
-              onClick={() => setActiveTab(tab)}
-            >
-              {TAB_LABELS[tab]}
-            </button>
-          ))}
-        </div>
+      <div className="doctor-request-workspace">
+        <DoctorPanel
+          className="doctor-request-list-panel"
+          title="Danh sách phiếu hẹn"
+          description="Chọn một phiếu ở cột trái để xem thông tin chi tiết ở cột phải."
+          aside={<span className="doctor-count-bubble">{filteredRequests.length}</span>}
+        >
+          <div className="doctor-request-list-body">
+            <div className="doctor-request-filters">
+              <div className="doctor-field">
+                <label className="doctor-label" htmlFor="request-search">
+                  Tìm kiếm nhanh
+                </label>
+                <input
+                  id="request-search"
+                  className="doctor-input doctor-request-search"
+                  type="search"
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                  placeholder="Tên, mã phiếu, số điện thoại, email..."
+                />
+              </div>
 
-        {query.isLoading ? (
-          <DoctorNotice tone="info" title="Đang tải yêu cầu đặt lịch" description="Hệ thống đang đồng bộ danh sách bệnh nhân chờ bác sĩ xác nhận." />
-        ) : null}
+              <div className="doctor-field">
+                <label className="doctor-label" htmlFor="request-filter">
+                  Lọc trạng thái
+                </label>
+                <select
+                  id="request-filter"
+                  className="doctor-select doctor-request-select"
+                  value={activeTab}
+                  onChange={(event) => {
+                    setActiveTab(event.target.value as RequestTab)
+                    setRejectingId(null)
+                    setLyDoTuChoi('')
+                  }}
+                >
+                  {(Object.keys(TAB_LABELS) as RequestTab[]).map((tab) => (
+                    <option key={tab} value={tab}>
+                      {TAB_LABELS[tab]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
 
-        {query.isError ? (
-          <DoctorNotice tone="danger" title="Không thể tải danh sách yêu cầu" description={getApiErrorMessage(query.error)} />
-        ) : null}
+            {query.isLoading ? (
+              <DoctorNotice tone="info" title="Đang tải yêu cầu đặt lịch" description="Hệ thống đang đồng bộ danh sách bệnh nhân chờ bác sĩ xác nhận." />
+            ) : null}
 
-        {!query.isLoading && !query.isError && filteredRequests.length === 0 ? (
-          <DoctorEmptyState
-            title="Không có yêu cầu ở tab này"
-            description="Hãy chuyển sang tab khác để xem các lịch hẹn đã đồng ý hoặc từ chối."
-          />
-        ) : null}
+            {query.isError ? (
+              <DoctorNotice tone="danger" title="Không thể tải danh sách yêu cầu" description={getApiErrorMessage(query.error)} />
+            ) : null}
 
-        {filteredRequests.length > 0 ? (
-          <div className="doctor-list">
-            {filteredRequests.map((request) => {
-              const status = getAppointmentStatusMeta(request.trangThaiPhieu)
-              const isRejecting = rejectingId === request.maPhieuDatLich
+            {!query.isLoading && !query.isError && filteredRequests.length === 0 ? (
+              <DoctorEmptyState
+                title={searchTerm.trim() ? 'Không tìm thấy phiếu hẹn phù hợp' : 'Không có phiếu hẹn ở nhóm này'}
+                description={
+                  searchTerm.trim()
+                    ? 'Hãy thử từ khóa khác hoặc đổi lại bộ lọc trạng thái để mở rộng kết quả.'
+                    : 'Hãy chuyển sang nhóm khác để xem những phiếu đang chờ, đã duyệt hoặc đã từ chối.'
+                }
+              />
+            ) : null}
 
-              return (
-                <article key={request.maPhieuDatLich} className="doctor-list-card">
-                  <div className="doctor-list-card__header">
-                    <div className="doctor-profile-strip">
-                      <DoctorAvatar name={request.hoTenBenhNhan} />
-                      <div>
-                        <h3 className="doctor-list-card__title">{request.hoTenBenhNhan}</h3>
-                        <p className="doctor-list-card__subtitle">
-                          {formatShortDate(request.ngayCuThe)} • {formatTimeRange(request.gioBatDau, request.gioKetThuc)}
-                        </p>
+            {filteredRequests.length > 0 ? (
+              <div className="doctor-request-list">
+                {filteredRequests.map((request) => {
+                  const status = getAppointmentStatusMeta(request.trangThaiPhieu)
+                  const isSelected = selectedRequestId === request.maPhieuDatLich
+
+                  return (
+                    <button
+                      key={request.maPhieuDatLich}
+                      type="button"
+                      className={`doctor-request-item${isSelected ? ' is-selected' : ''}`}
+                      onClick={() => {
+                        setSelectedRequestId(request.maPhieuDatLich)
+                        setRejectingId(null)
+                        setLyDoTuChoi('')
+                      }}
+                    >
+                      <div className="doctor-request-item__header">
+                        <div className="doctor-profile-strip doctor-profile-strip--compact">
+                          <DoctorAvatar name={request.hoTenBenhNhan} />
+                          <div>
+                            <h3 className="doctor-profile-strip__name">{request.hoTenBenhNhan}</h3>
+                            <p className="doctor-profile-strip__meta">
+                              {formatShortDate(request.ngayCuThe)} • {formatTimeRange(request.gioBatDau, request.gioKetThuc)}
+                            </p>
+                          </div>
+                        </div>
+                        <DoctorStatusBadge label={status.label} tone={status.tone} />
                       </div>
+
+                      <div className="doctor-request-item__meta">
+                        <span>Mã phiếu #{request.maPhieuDatLich}</span>
+                        <span>{request.loaiPhieu}</span>
+                      </div>
+
+                      <p className="doctor-request-item__preview">
+                        {request.trieuChungGhiChu?.trim() || 'Chưa có ghi chú triệu chứng từ bệnh nhân.'}
+                      </p>
+                    </button>
+                  )
+                })}
+              </div>
+            ) : null}
+          </div>
+        </DoctorPanel>
+
+        <DoctorPanel
+          className="doctor-request-detail-panel"
+          title={selectedRequest ? `Chi tiết phiếu hẹn #${selectedRequest.maPhieuDatLich}` : 'Chi tiết phiếu hẹn'}
+          description={selectedRequest ? 'Thông tin đầy đủ của phiếu hẹn đang chọn và các thao tác xử lý tương ứng.' : 'Chọn một phiếu hẹn ở cột trái để xem nội dung.'}
+          aside={selectedRequest ? <DoctorStatusBadge label={selectedStatus.label} tone={selectedStatus.tone} /> : null}
+        >
+          <div className="doctor-request-detail-body">
+            {!selectedRequest ? (
+              <DoctorEmptyState title="Chưa có phiếu nào được chọn" description="Khi bạn bấm vào một lịch hẹn ở bên trái, phần này sẽ hiển thị toàn bộ thông tin chi tiết." />
+            ) : null}
+
+            {selectedRequest && detailQuery.isLoading ? (
+              <DoctorNotice tone="info" title="Đang tải chi tiết phiếu hẹn" description="Hệ thống đang lấy đầy đủ thông tin bệnh nhân, lịch khám và trạng thái xử lý." />
+            ) : null}
+
+            {selectedRequest && detailQuery.isError ? (
+              <DoctorNotice tone="danger" title="Không thể tải chi tiết phiếu hẹn" description={getApiErrorMessage(detailQuery.error)} />
+            ) : null}
+
+            {selectedRequest ? (
+              <div className="doctor-request-detail-stack">
+                <div className="doctor-request-hero">
+                  <div className="doctor-profile-strip">
+                    <DoctorAvatar name={selectedDetail?.hoTenBenhNhan ?? selectedRequest.hoTenBenhNhan} />
+                    <div>
+                      <h3 className="doctor-profile-strip__name">{selectedDetail?.hoTenBenhNhan ?? selectedRequest.hoTenBenhNhan}</h3>
+                      <p className="doctor-profile-strip__meta">
+                        {formatLongDate(selectedDetail?.ngayCuThe ?? selectedRequest.ngayCuThe)} •{' '}
+                        {formatTimeRange(selectedDetail?.gioBatDau ?? selectedRequest.gioBatDau, selectedDetail?.gioKetThuc ?? selectedRequest.gioKetThuc)}
+                      </p>
                     </div>
-                    <DoctorStatusBadge label={status.label} tone={status.tone} />
                   </div>
 
-                  <div className="doctor-meta-list">
-                    <div className="doctor-meta-item">
-                      <span className="doctor-meta-item__label">Số điện thoại</span>
-                      <div className="doctor-meta-item__value">{request.soDienThoaiBenhNhan}</div>
-                    </div>
-                    <div className="doctor-meta-item">
-                      <span className="doctor-meta-item__label">Email</span>
-                      <div className="doctor-meta-item__value">{request.emailBenhNhan}</div>
-                    </div>
-                    <div className="doctor-meta-item">
-                      <span className="doctor-meta-item__label">Loại phiếu</span>
-                      <div className="doctor-meta-item__value">{request.loaiPhieu}</div>
-                    </div>
-                    <div className="doctor-meta-item">
-                      <span className="doctor-meta-item__label">Mã phiếu đặt lịch</span>
-                      <div className="doctor-meta-item__value">#{request.maPhieuDatLich}</div>
-                    </div>
+                  <div className="doctor-request-hero__badges">
+                    <DoctorStatusBadge label={selectedStatus.label} tone={selectedStatus.tone} />
+                    <span className="doctor-chip">Mã chi tiết #{selectedDetail?.maChiTiet ?? selectedRequest.maChiTiet}</span>
                   </div>
+                </div>
 
-                  {request.trieuChungGhiChu ? (
-                    <div className="doctor-note-card">
-                      <p className="doctor-note">Ghi chú triệu chứng: {request.trieuChungGhiChu}</p>
+                <div className="doctor-meta-list">
+                  <div className="doctor-meta-item">
+                    <span className="doctor-meta-item__label">Số điện thoại</span>
+                    <div className="doctor-meta-item__value">{selectedDetail?.soDienThoaiBenhNhan ?? selectedRequest.soDienThoaiBenhNhan}</div>
+                  </div>
+                  <div className="doctor-meta-item">
+                    <span className="doctor-meta-item__label">Email</span>
+                    <div className="doctor-meta-item__value">{selectedDetail?.emailBenhNhan ?? selectedRequest.emailBenhNhan}</div>
+                  </div>
+                  <div className="doctor-meta-item">
+                    <span className="doctor-meta-item__label">Loại phiếu</span>
+                    <div className="doctor-meta-item__value">{selectedDetail?.loaiPhieu ?? selectedRequest.loaiPhieu}</div>
+                  </div>
+                  <div className="doctor-meta-item">
+                    <span className="doctor-meta-item__label">Mã phiếu đặt lịch</span>
+                    <div className="doctor-meta-item__value">#{selectedDetail?.maPhieuDatLich ?? selectedRequest.maPhieuDatLich}</div>
+                  </div>
+                  <div className="doctor-meta-item">
+                    <span className="doctor-meta-item__label">Cơ sở y tế</span>
+                    <div className="doctor-meta-item__value">{selectedDetail?.tenCoSoYTe ?? 'Chưa cập nhật'}</div>
+                  </div>
+                  <div className="doctor-meta-item">
+                    <span className="doctor-meta-item__label">Địa chỉ khám</span>
+                    <div className="doctor-meta-item__value">{selectedDetail?.diaChiLamViec ?? 'Chưa cập nhật'}</div>
+                  </div>
+                </div>
+
+                <div className="doctor-note-card">
+                  <p className="doctor-note">
+                    Ghi chú triệu chứng: {(selectedDetail?.trieuChungGhiChu ?? selectedRequest.trieuChungGhiChu)?.trim() || 'Chưa có ghi chú triệu chứng từ bệnh nhân.'}
+                  </p>
+                </div>
+
+                {selectedDetail?.lyDoTuChoi ? (
+                  <div className="doctor-note-card doctor-note-card--danger">
+                    <p className="doctor-note">Lý do từ chối: {selectedDetail.lyDoTuChoi}</p>
+                  </div>
+                ) : null}
+
+                {actionState ? (
+                  <div className="doctor-request-action-box">
+                    <div>
+                      <h3 className="doctor-request-action-box__title">{actionState.title}</h3>
+                      <p className="doctor-request-action-box__description">{actionState.description}</p>
                     </div>
-                  ) : null}
 
-                  {isRejecting ? (
-                    <div className="doctor-section-stack">
-                      <div className="doctor-field">
-                        <label className="doctor-label" htmlFor={`reject-reason-${request.maPhieuDatLich}`}>
-                          Lý do từ chối
-                        </label>
-                        <textarea
-                          id={`reject-reason-${request.maPhieuDatLich}`}
-                          className="doctor-textarea"
-                          value={lyDoTuChoi}
-                          onChange={(event) => setLyDoTuChoi(event.target.value)}
-                          placeholder="Nhập lý do từ chối rõ ràng để bệnh nhân dễ theo dõi."
-                        />
-                      </div>
+                    {isRejecting ? (
+                      <div className="doctor-section-stack">
+                        <div className="doctor-field">
+                          <label className="doctor-label" htmlFor={`reject-reason-${selectedRequest.maPhieuDatLich}`}>
+                            Lý do từ chối
+                          </label>
+                          <textarea
+                            id={`reject-reason-${selectedRequest.maPhieuDatLich}`}
+                            className="doctor-textarea"
+                            value={lyDoTuChoi}
+                            onChange={(event) => setLyDoTuChoi(event.target.value)}
+                            placeholder="Nhập lý do từ chối rõ ràng để bệnh nhân dễ theo dõi."
+                          />
+                        </div>
 
-                      <div className="doctor-button-row">
-                        <button
-                          className="doctor-button doctor-button--danger"
-                          type="button"
-                          disabled={reject.isPending || !lyDoTuChoi.trim()}
-                          onClick={() =>
-                            reject.mutate({
-                              maPhieuDatLich: request.maPhieuDatLich,
-                              reason: lyDoTuChoi.trim(),
-                            })
-                          }
-                        >
-                          {reject.isPending ? 'Đang gửi phản hồi...' : 'Xác nhận từ chối'}
-                        </button>
-                        <button
-                          className="doctor-button doctor-button--secondary"
-                          type="button"
-                          onClick={() => {
-                            setRejectingId(null)
-                            setLyDoTuChoi('')
-                          }}
-                        >
-                          Hủy thao tác
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="doctor-button-row">
-                      {request.trangThaiPhieu === 'CHO_XAC_NHAN' ? (
-                        <>
-                          <button
-                            className="doctor-button doctor-button--primary"
-                            type="button"
-                            disabled={approve.isPending}
-                            onClick={() => approve.mutate(request.maPhieuDatLich)}
-                          >
-                            {approve.isPending ? 'Đang duyệt...' : 'Đồng ý lịch hẹn'}
-                          </button>
+                        <div className="doctor-button-row">
                           <button
                             className="doctor-button doctor-button--danger"
                             type="button"
-                            disabled={reject.isPending}
+                            disabled={reject.isPending || !lyDoTuChoi.trim()}
+                            onClick={() =>
+                              reject.mutate({
+                                maPhieuDatLich: selectedRequest.maPhieuDatLich,
+                                reason: lyDoTuChoi.trim(),
+                              })
+                            }
+                          >
+                            {reject.isPending ? 'Đang gửi phản hồi...' : 'Xác nhận từ chối'}
+                          </button>
+                          <button
+                            className="doctor-button doctor-button--secondary"
+                            type="button"
                             onClick={() => {
-                              setRejectingId(request.maPhieuDatLich)
+                              setRejectingId(null)
                               setLyDoTuChoi('')
                             }}
                           >
-                            Từ chối lịch hẹn
+                            Hủy thao tác
                           </button>
-                        </>
-                      ) : null}
-                    </div>
-                  )}
-                </article>
-              )
-            })}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="doctor-button-row">
+                        {currentStatus === 'CHO_XAC_NHAN' ? (
+                          <>
+                            <button
+                              className="doctor-button doctor-button--primary"
+                              type="button"
+                              disabled={approve.isPending}
+                              onClick={() => approve.mutate(selectedRequest.maPhieuDatLich)}
+                            >
+                              {approve.isPending ? 'Đang duyệt...' : 'Đồng ý lịch hẹn'}
+                            </button>
+                            <button
+                              className="doctor-button doctor-button--danger"
+                              type="button"
+                              disabled={reject.isPending}
+                              onClick={() => {
+                                setRejectingId(selectedRequest.maPhieuDatLich)
+                                setLyDoTuChoi('')
+                              }}
+                            >
+                              Từ chối lịch hẹn
+                            </button>
+                          </>
+                        ) : null}
+
+                        {showCompleteButton ? (
+                          <button
+                            className="doctor-button doctor-button--primary"
+                            type="button"
+                            disabled={completeVisit.isPending}
+                            onClick={() => completeVisit.mutate(selectedRequest.maPhieuDatLich)}
+                          >
+                            {completeVisit.isPending ? 'Đang cập nhật...' : 'Xác nhận đã khám'}
+                          </button>
+                        ) : null}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </div>
-        ) : null}
-      </DoctorPanel>
+        </DoctorPanel>
+      </div>
     </div>
   )
 }
